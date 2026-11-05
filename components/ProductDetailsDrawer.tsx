@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   CircleAlert,
   CalendarDays,
+  ExternalLink,
   FileText,
   ImageIcon,
   ImagePlus,
@@ -586,6 +587,8 @@ export function ProductDetailsDrawer({
   const [imageEditorIndex, setImageEditorIndex] = useState<number | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [barcode, setBarcode] = useState("");
+  const [storefrontHandle, setStorefrontHandle] = useState("");
+  const [shopifyAdminUrl, setShopifyAdminUrl] = useState("");
   const [salesChannels, setSalesChannels] = useState<SalesChannel[]>([]);
   const [originalSalesChannels, setOriginalSalesChannels] = useState<
     SalesChannel[]
@@ -677,6 +680,8 @@ export function ProductDetailsDrawer({
     setAvailableTags([]);
     setAvailableCollections([]);
     setBarcode("");
+    setStorefrontHandle("");
+    setShopifyAdminUrl("");
     setSalesChannels([]);
     setOriginalSalesChannels([]);
     setSalesChannelsError("");
@@ -689,10 +694,10 @@ export function ProductDetailsDrawer({
   }, [activeRow?.sku, activeRow?.dataHora]);
 
   useEffect(() => {
-    if (!activeRow || !canEdit) return;
+    if (!activeRow) return;
     void openEditor(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRow?.sku, canEdit]);
+  }, [activeRow?.sku]);
 
   useEffect(() => {
     if (!row) {
@@ -896,6 +901,12 @@ export function ProductDetailsDrawer({
     .toLowerCase()
     .startsWith("erro");
   const title = currentTitle(activeRow) || "Produto sem título";
+  const shopifyNumericId = /^gid:\/\/shopify\/Product\/(\d+)$/.exec(
+    form.shopifyId,
+  )?.[1];
+  const storefrontUrl = storefrontHandle
+    ? `https://www.pitterpan.com.br/products/${encodeURIComponent(storefrontHandle)}`
+    : "";
   const update = (field: keyof EditForm, value: string) =>
     setForm((current) => (current ? { ...current, [field]: value } : current));
 
@@ -1075,6 +1086,8 @@ export function ProductDetailsDrawer({
           : [],
       );
       setBarcode(String(product.barcode || ""));
+      setStorefrontHandle(String(product.handle || ""));
+      setShopifyAdminUrl(String(product.shopifyAdminUrl || ""));
       const loadedSalesChannels = Array.isArray(product.salesChannels)
         ? product.salesChannels
             .map((item: any) => ({
@@ -1583,6 +1596,53 @@ export function ProductDetailsDrawer({
           {step === "details" && (
             <>
               <div className="product-drawer-body">
+                <nav
+                  className="product-external-links"
+                  aria-label="Visualizar este produto"
+                >
+                  {shopifyAdminUrl ? (
+                    <a
+                      href={shopifyAdminUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ShoppingBag size={17} aria-hidden="true" />
+                      <span>
+                        <strong>Ver na Shopify</strong>
+                        <small>ID {shopifyNumericId}</small>
+                      </span>
+                      <ExternalLink size={15} aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <span className="is-unavailable">Shopify indisponível</span>
+                  )}
+                  {storefrontUrl ? (
+                    <a
+                      href={storefrontUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Store size={17} aria-hidden="true" />
+                      <span>
+                        <strong>Ver na loja Pitter Pan</strong>
+                        <small>Abre a página do produto</small>
+                      </span>
+                      <ExternalLink size={15} aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <span className="is-unavailable">
+                      Produto sem link na loja
+                    </span>
+                  )}
+                  {storefrontUrl &&
+                    (shopifyStatus === "DRAFT" ||
+                      shopifyStatus === "ARCHIVED") && (
+                      <small className="product-external-links-note">
+                        Este produto pode não estar visível na loja enquanto
+                        estiver {shopifyStatus === "DRAFT" ? "em rascunho" : "arquivado"}.
+                      </small>
+                    )}
+                </nav>
                 <section className="product-shopify-status-summary">
                   <div>
                     <label htmlFor="product-shopify-status-select">Status no Shopify</label>

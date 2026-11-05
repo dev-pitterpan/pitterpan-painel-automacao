@@ -9314,6 +9314,60 @@ button.user-list-avatar:hover {
   border-radius: 14px;
   background: #fff;
 }
+.product-external-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.product-external-links > a,
+.product-external-links > .is-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 9px 12px;
+  border: 1px solid #d9e5f5;
+  border-radius: 12px;
+  background: #fff;
+  color: #17366a;
+  text-decoration: none;
+}
+.product-external-links > a:hover {
+  border-color: #8db8f5;
+  background: #f4f8ff;
+}
+.product-external-links > a:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.product-external-links > a > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.product-external-links strong {
+  font-size: 11px;
+  line-height: 1.25;
+}
+.product-external-links small {
+  color: #7082a1;
+  font-size: 9px;
+  line-height: 1.25;
+}
+.product-external-links > .is-unavailable {
+  color: #8290a8;
+  font-size: 10px;
+}
+.product-external-links .product-external-links-note {
+  grid-column: 1 / -1;
+}
+@container product-panel (max-width: 470px) {
+  .product-external-links {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .product-shopify-status-summary > div {
   display: grid;
   gap: 4px;

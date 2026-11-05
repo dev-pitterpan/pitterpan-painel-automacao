@@ -812,8 +812,22 @@ export async function getShopifyCatalogProductDetails(
   const facets = includeOptions
     ? await getShopifyCatalogFacets()
     : { tags: [], collections: [] };
+  const productId = /^gid:\/\/shopify\/Product\/(\d+)$/.exec(
+    product.shopifyId,
+  )?.[1];
+  const storeDomain = String(process.env.SHOPIFY_STORE_DOMAIN || "")
+    .trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
+  const storeName = storeDomain.replace(/\.myshopify\.com$/i, "");
+  const shopifyAdminUrl =
+    productId && /^[a-z0-9][a-z0-9-]*$/i.test(storeName)
+      ? `https://admin.shopify.com/store/${storeName}/products/${productId}`
+      : "";
   return {
     id: product.shopifyId,
+    handle: product.handle,
+    shopifyAdminUrl,
     status: product.status,
     title: product.title,
     description: product.descriptionHtml,
