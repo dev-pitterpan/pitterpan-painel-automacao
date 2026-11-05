@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/geist-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
   --blue: #1268f4;
   --blue-dark: #061a36;
@@ -31,7 +39,7 @@ body {
   overflow-x: clip;
 }
 body {
-  font-family: "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
+  font-family: "Geist", "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
   background-image:
     radial-gradient(
       ellipse at 88% 7%,
