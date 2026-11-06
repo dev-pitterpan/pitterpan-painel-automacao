@@ -6,7 +6,7 @@ import { isSuccessfulReprocessResult } from "@/lib/auth";
 export const runtime = "nodejs";
 
 // The matching secret is stored only as CODEX_PROCESSING_WRITE_TOKEN in the local .env.local.
-const TOKEN_HASH = "3e6a83cbacf0239c1e0c067ef34b6d98d2c6948de471b31590e68ef8778043e0";
+const TOKEN_HASH = "ae0d6129c1c2c5e27cf71b9409a1084bfb25077c3425d33c88aa053b193bf4d0";
 const MAX_BODY_BYTES = 512_000;
 
 type ProcessingRecord = {
