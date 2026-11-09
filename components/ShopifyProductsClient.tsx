@@ -900,7 +900,7 @@ export function ShopifyProductsClient({
         text: message,
       });
       addNotification("error", message);
-      if (action === "unarchive") await load();
+      if (action === "unarchive" || action === "delete") await load();
     } finally {
       setBulkActionRunning(null);
     }
