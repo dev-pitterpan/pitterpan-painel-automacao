@@ -9,6 +9,7 @@ import {
   archiveShopifyProduct,
   unarchiveShopifyProduct,
   deleteShopifyProduct,
+  findMissingShopifyProductIds,
   getShopifySalesChannels,
   shopifyProductToCatalog,
   unpublishShopifyProduct,
@@ -141,7 +142,16 @@ export async function POST(req: NextRequest) {
               })),
             );
           } else {
-            await deleteShopifyProduct(product.shopify_id);
+            try {
+              await deleteShopifyProduct(product.shopify_id);
+            } catch (deleteError) {
+              // A exclusão também está concluída se o produto já saiu da Shopify.
+              // Confirme pelo ID antes de remover o registro do catálogo local.
+              const missing = await findMissingShopifyProductIds([
+                product.shopify_id,
+              ]);
+              if (!missing.includes(product.shopify_id)) throw deleteError;
+            }
           }
           return product;
         }),
