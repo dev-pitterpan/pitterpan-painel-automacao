@@ -107,24 +107,22 @@ export async function GET(req: NextRequest) {
         params.get("compact") !== "1",
         params.get("id") || "",
       );
-      if (product && !product.barcodeSynced) {
+      if (product) {
         try {
           const liveProduct = await fetchShopifyProduct(product.id);
           if (liveProduct) {
             const synchronizedProduct = shopifyProductToCatalog(liveProduct);
             await upsertShopifyCatalogProducts([synchronizedProduct]);
-            const requestedSku = String(params.get("sku") || "").trim();
-            const variant = synchronizedProduct.variants.find(
-              (item) => item.sku === requestedSku,
+            const refreshed = await getShopifyCatalogProductDetails(
+              params.get("sku") || "",
+              params.get("title") || "",
+              params.get("compact") !== "1",
+              product.id,
             );
-            product = {
-              ...product,
-              barcode: variant?.barcode || "",
-              barcodeSynced: true,
-            };
+            if (refreshed) product = refreshed;
           }
         } catch {
-          // Mantém os detalhes locais disponíveis se a consulta pontual falhar.
+          // Mantém os detalhes locais disponíveis se a Shopify estiver indisponível.
         }
       }
       if (product) {
