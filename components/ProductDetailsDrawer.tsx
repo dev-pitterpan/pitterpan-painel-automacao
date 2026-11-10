@@ -502,11 +502,13 @@ function ValueCard({
   before,
   after,
   changed,
+  afterLabel = "Depois",
 }: {
   label: string;
   before: string;
   after: string;
   changed: boolean;
+  afterLabel?: string;
 }) {
   return (
     <section className="comparison-card">
@@ -523,7 +525,7 @@ function ValueCard({
         </div>
         <ArrowRight size={16} />
         <div>
-          <small>Depois</small>
+          <small>{afterLabel}</small>
           <p>{after || "Não informado"}</p>
         </div>
       </div>
@@ -573,6 +575,7 @@ export function ProductDetailsDrawer({
   const [form, setForm] = useState<EditForm | null>(null);
   const [original, setOriginal] = useState<EditForm | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(false);
+  const [hasLiveDetails, setHasLiveDetails] = useState(false);
   const [saving, setSaving] = useState(false);
   const [shopifyStatus, setShopifyStatus] = useState<ShopifyProductStatus | "">("");
   const [statusSaving, setStatusSaving] = useState(false);
@@ -672,6 +675,7 @@ export function ProductDetailsDrawer({
     setStep("details");
     setForm(initial);
     setOriginal(initial);
+    setHasLiveDetails(false);
     setShopifyStatus("");
     setMedia(cachedMedia);
     setOriginalMedia(cachedMedia);
@@ -1048,6 +1052,7 @@ export function ProductDetailsDrawer({
         activeRow!.sku,
         currentTitle(activeRow!),
         activeRow!.shopifyId || "",
+        !showEditor,
       );
       const productMedia = Array.isArray(product.images)
         ? product.images
@@ -1069,6 +1074,7 @@ export function ProductDetailsDrawer({
       };
       setForm(next);
       setOriginal(next);
+      setHasLiveDetails(true);
       const loadedStatus = String(product.status || "").toUpperCase();
       setShopifyStatus(
         loadedStatus in shopifyStatusLabel
@@ -1759,8 +1765,13 @@ export function ProductDetailsDrawer({
                 <ValueCard
                   label="Coleções"
                   before={activeRow.colecoesAntes}
-                  after={activeRow.colecoesDepois}
-                  changed={activeRow.colecoesAlteradas}
+                  after={hasLiveDetails ? form.collections : activeRow.colecoesDepois}
+                  changed={
+                    hasLiveDetails
+                      ? activeRow.colecoesAntes !== form.collections
+                      : activeRow.colecoesAlteradas
+                  }
+                  afterLabel={hasLiveDetails ? "Atual na Shopify" : "Depois"}
                 />
                 <section className="description-result">
                   <div>
