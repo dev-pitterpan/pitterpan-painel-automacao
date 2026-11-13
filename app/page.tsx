@@ -11,6 +11,7 @@ export default async function Page({
   return (
     <DashboardClient
       mode="dashboard"
+      userId={user?.id}
       greetingName={user?.name}
       loginTransition={params.fromLogin === "1"}
     />

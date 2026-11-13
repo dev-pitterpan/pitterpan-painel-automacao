@@ -61,6 +61,8 @@ export type DashboardData = {
   comparison: {
     available: boolean;
     label: string;
+    previousTotal?: number;
+    previousErrors?: number;
   };
   catalogQuality?: {
     total: number;

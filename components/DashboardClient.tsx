@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   AreaChart,
@@ -80,6 +81,8 @@ const QUALITY_LABELS: Record<string, string> = {
   errors: "Com erro",
 };
 const PRODUCTS_PER_PAGE = 100;
+const HOME_CACHE_MS = 5 * 60_000;
+const homeCache = new Map<string, { data: DashboardData; loadedAt: number }>();
 const EMPTY_CATALOG_VALUES = new Set([
   "",
   "-",
@@ -276,6 +279,8 @@ const Metric = ({
   note,
   comparison,
   comparisonLabel = "mês anterior",
+  comparisonUnit = "%",
+  zeroBase = false,
   inverse = false,
   icon: Icon,
   imageSrc,
@@ -287,12 +292,15 @@ const Metric = ({
   note?: string;
   comparison?: number | null;
   comparisonLabel?: string;
+  comparisonUnit?: "%" | "p.p.";
+  zeroBase?: boolean;
   inverse?: boolean;
   icon?: LucideIcon;
   imageSrc?: string;
   href?: string;
   tone?: "blue" | "green" | "red" | "gold" | "violet";
 }) => {
+  const router = useRouter();
   const roundedComparison =
     comparison === null || comparison === undefined
       ? comparison
@@ -305,10 +313,10 @@ const Metric = ({
       className={`metric-card metric-${tone} ${href ? "is-clickable" : ""}`}
       role={href ? "link" : undefined}
       tabIndex={href ? 0 : undefined}
-      onClick={() => href && window.location.assign(href)}
+      onClick={() => href && router.push(href)}
       onKeyDown={(event) => {
         if (href && (event.key === "Enter" || event.key === " "))
-          window.location.assign(href);
+          router.push(href);
       }}
     >
       <div className="metric-top">
@@ -329,14 +337,18 @@ const Metric = ({
               className={`metric-comparison ${comparison === null || normalizedComparison === 0 ? "is-neutral" : normalizedComparison! >= 0 !== inverse ? "is-positive" : "is-negative"}`}
             >
               {comparison === null ? (
-                <span title="Não existem registros no período escolhido para comparação.">
-                  Sem base <span aria-hidden="true">ⓘ</span>
-                </span>
+                zeroBase ? (
+                  <span title="O mês anterior tinha valor zero; não existe porcentagem de crescimento definida.">Novo</span>
+                ) : (
+                  <span title="Não existem registros no período escolhido para comparação.">
+                    Sem base <span aria-hidden="true">ⓘ</span>
+                  </span>
+                )
               ) : (
-                `${normalizedComparison === 0 ? "→" : normalizedComparison! > 0 ? "↑" : "↓"} ${normalizedComparison! > 0 ? "+" : ""}${normalizedComparison}%`
+                `${normalizedComparison === 0 ? "→" : normalizedComparison! > 0 ? "↑" : "↓"} ${normalizedComparison! > 0 ? "+" : ""}${normalizedComparison}${comparisonUnit}`
               )}
             </div>
-            {comparison !== null && (
+            {(comparison !== null || zeroBase) && (
               <span className="metric-previous">vs. {comparisonLabel}</span>
             )}
           </div>
@@ -448,11 +460,14 @@ export function DashboardClient({
   mode = "dashboard",
   greetingName,
   loginTransition = false,
+  userId,
 }: {
   mode?: "dashboard" | "products" | "errors";
   greetingName?: string;
   loginTransition?: boolean;
+  userId?: number;
 }) {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [errorOverviewRows, setErrorOverviewRows] = useState<HistoryRow[]>([]);
   const [error, setError] = useState("");
@@ -503,7 +518,6 @@ export function DashboardClient({
     "unknown" | "operational" | "warning" | "error"
   >("unknown");
   const loadRequestId = useRef(0);
-  const lastDashboardFocusRefresh = useRef(Date.now());
   const { activeProductKey, openProduct } = useProductPanel();
 
   useEffect(() => {
@@ -677,17 +691,37 @@ export function DashboardClient({
   }, [data, errorOverviewRows]);
   const currentDashboardMetrics = useMemo(() => {
     const total = data?.metrics.total || 0;
-    const errors = Math.min(
-      total,
-      Math.max(0, data?.source?.currentErrors ?? data?.metrics.erros ?? 0),
-    );
+    const fullPeriod = appliedFilters.month === "all";
+    const errors = fullPeriod
+      ? Math.min(total, Math.max(0, data?.source?.currentErrors ?? data?.metrics.erros ?? 0))
+      : Math.min(total, Math.max(0, data?.metrics.erros ?? 0));
     const success = Math.max(0, total - errors);
+    const successRate = total ? (success / total) * 100 : 0;
+    const previousTotal = data?.comparison.previousTotal ?? 0;
+    const previousErrors = Math.min(
+      previousTotal,
+      Math.max(0, data?.comparison.previousErrors ?? 0),
+    );
+    const previousSuccess = previousTotal - previousErrors;
+    const percentChange = (current: number, previous: number) =>
+      previous === 0 ? (current === 0 ? 0 : null) : ((current - previous) / previous) * 100;
     return {
       errors,
       success,
-      successRate: total ? (success / total) * 100 : 0,
+      successRate,
+      successComparison: data?.comparison.available
+        ? percentChange(success, previousSuccess)
+        : null,
+      errorsComparison: data?.comparison.available
+        ? percentChange(errors, previousErrors)
+        : null,
+      rateComparison: data?.comparison.available
+        ? successRate - (previousTotal ? (previousSuccess / previousTotal) * 100 : 0)
+        : null,
+      successZeroBase: data?.comparison.available && previousSuccess === 0 && success > 0,
+      errorsZeroBase: data?.comparison.available && previousErrors === 0 && errors > 0,
     };
-  }, [data]);
+  }, [data, appliedFilters.month]);
   const processedFacets = useMemo<ProcessedFacets>(() => {
     const rows = data?.rows || [];
     const unique = (values: string[]) =>
@@ -822,10 +856,7 @@ export function DashboardClient({
 
   async function load(refresh = false) {
     const requestId = ++loadRequestId.current;
-    setLoading(true);
-    setLoadingExiting(false);
-    setError("");
-
+    let servedFromCache = false;
     try {
       const p = new URLSearchParams({
         days: appliedFilters.days,
@@ -854,6 +885,28 @@ export function DashboardClient({
       if (refresh) {
         p.set("refresh", "1");
       }
+
+      const cacheParams = new URLSearchParams(p);
+      cacheParams.delete("refresh");
+      const cacheKey = JSON.stringify([userId, cacheParams.toString()]);
+      const cached =
+        mode === "dashboard" && !refresh ? homeCache.get(cacheKey) : undefined;
+      if (cached && Date.now() - cached.loadedAt < HOME_CACHE_MS) {
+        servedFromCache = true;
+        setData(cached.data);
+        setBrandOverview({
+          byBrand: cached.data.byBrand,
+          total: cached.data.metrics.total,
+        });
+        setLoading(false);
+        setLoadingExiting(false);
+        setError("");
+        return;
+      }
+
+      setLoading(true);
+      setLoadingExiting(false);
+      setError("");
 
       const response = await fetch(`/api/dashboard?${p.toString()}`, {
         cache: "no-store",
@@ -898,6 +951,7 @@ export function DashboardClient({
         byBrand: Array.isArray(json.byBrand) ? json.byBrand : [],
 
         brands: Array.isArray(json.brands) ? json.brands : [],
+        catalogQuality: json.catalogQuality,
         permissions: json.permissions,
         source: json.source,
         comparison: json.comparison || {
@@ -907,6 +961,10 @@ export function DashboardClient({
       };
 
       setData(safeData);
+      if (mode === "dashboard") {
+        if (homeCache.size >= 12) homeCache.clear();
+        homeCache.set(cacheKey, { data: safeData, loadedAt: Date.now() });
+      }
       if (!refresh) {
         setMissingSkus(
           missingSkuTerms(
@@ -953,7 +1011,7 @@ export function DashboardClient({
           : "Erro desconhecido ao carregar o dashboard.",
       );
     } finally {
-      if (requestId !== loadRequestId.current) return;
+      if (requestId !== loadRequestId.current || servedFromCache) return;
       setLoading(false);
       setLoadingProgress(100);
       setLoadingExiting(true);
@@ -965,22 +1023,6 @@ export function DashboardClient({
     load();
   }, [appliedFilters, filtersReady, mode]);
 
-  useEffect(() => {
-    if (!filtersReady || mode !== "dashboard") return;
-    const refreshOnReturn = () => {
-      if (document.visibilityState !== "visible") return;
-      const now = Date.now();
-      if (now - lastDashboardFocusRefresh.current < 30_000) return;
-      lastDashboardFocusRefresh.current = now;
-      void load();
-    };
-    window.addEventListener("focus", refreshOnReturn);
-    document.addEventListener("visibilitychange", refreshOnReturn);
-    return () => {
-      window.removeEventListener("focus", refreshOnReturn);
-      document.removeEventListener("visibilitychange", refreshOnReturn);
-    };
-  }, [appliedFilters, filtersReady, mode]);
 
   useEffect(() => {
     if (!filtersReady || mode !== "dashboard" || !appliedFilters.marca) return;
@@ -1899,7 +1941,8 @@ export function DashboardClient({
             <Metric
               label="Sucesso"
               value={currentDashboardMetrics.success}
-              comparison={null}
+              comparison={currentDashboardMetrics.successComparison}
+              zeroBase={currentDashboardMetrics.successZeroBase}
               comparisonLabel={data.comparison.label}
               imageSrc="/icons/verificar.png"
               href="/produtos/processados?status=sucesso"
@@ -1908,7 +1951,8 @@ export function DashboardClient({
             <Metric
               label="Erros"
               value={currentDashboardMetrics.errors}
-              comparison={null}
+              comparison={currentDashboardMetrics.errorsComparison}
+              zeroBase={currentDashboardMetrics.errorsZeroBase}
               comparisonLabel={data.comparison.label}
               inverse
               imageSrc="/icons/botao-x.png"
@@ -1918,7 +1962,8 @@ export function DashboardClient({
             <Metric
               label="Taxa de sucesso"
               value={`${currentDashboardMetrics.successRate.toFixed(2)}%`}
-              comparison={null}
+              comparison={currentDashboardMetrics.rateComparison}
+              comparisonUnit="p.p."
               comparisonLabel={data.comparison.label}
               imageSrc="/icons/percentagem.png"
               tone="violet"
@@ -2242,9 +2287,7 @@ export function DashboardClient({
                       className={`quality-item tone-${item.tone}`}
                       key={item.label}
                       onClick={() =>
-                        window.location.assign(
-                          `/produtos/processados?quality=${item.key}`,
-                        )
+                        router.push(`/produtos/processados?quality=${item.key}`)
                       }
                       title={`Ver produtos: ${item.label.toLowerCase()}`}
                     >
@@ -2262,7 +2305,7 @@ export function DashboardClient({
               <div className="quality-summary">
                 <span>
                   <b>{catalogQuality.total.toLocaleString("pt-BR")}</b> produtos
-                  únicos avaliados
+                  com SKU no histórico avaliados
                 </span>
                 <span>
                   <b>{data.metrics.titulosAlterados.toLocaleString("pt-BR")}</b>{" "}
@@ -2674,7 +2717,7 @@ export function DashboardClient({
               <button
                 type="button"
                 className="btn"
-                onClick={() => window.location.assign("/produtos/processados")}
+                onClick={() => router.push("/produtos/processados")}
               >
                 Ver todos os produtos
               </button>

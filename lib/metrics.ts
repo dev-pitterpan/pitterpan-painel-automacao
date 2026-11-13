@@ -112,12 +112,10 @@ export function calculateCatalogQuality(rows: HistoryRow[]) {
 
   products.forEach((row) => {
     const issues = {
-      missingTitle: !hasCatalogValue(row.tituloDepois || row.tituloAntes),
+      missingTitle: !hasCatalogValue(row.tituloDepois),
       missingBrand: !isValidBrand(row.marca),
-      missingTags: !hasCatalogValue(row.tagsDepois || row.tagsAntes),
-      missingCollection: !hasCatalogValue(
-        row.colecoesDepois || row.colecoesAntes,
-      ),
+      missingTags: !hasCatalogValue(row.tagsDepois),
+      missingCollection: !hasCatalogValue(row.colecoesDepois),
       missingSku: !hasCatalogValue(row.sku),
       errors: row.status.toLowerCase().startsWith("erro"),
     };
@@ -143,7 +141,7 @@ export function calculateCatalogQuality(rows: HistoryRow[]) {
 }
 
 function percentageChange(current: number, previous: number) {
-  if (previous === 0) return null;
+  if (previous === 0) return current === 0 ? 0 : null;
   return ((current - previous) / previous) * 100;
 }
 
@@ -210,15 +208,25 @@ function monthLabel(month: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function matchesQuality(row: HistoryRow, quality: string) {
+function matchesQuality(
+  row: HistoryRow,
+  quality: string,
+  currentCatalog = false,
+) {
   if (!quality) return true;
   if (quality === "missingTitle")
-    return !hasCatalogValue(row.tituloDepois || row.tituloAntes);
+    return !hasCatalogValue(
+      currentCatalog ? row.tituloDepois : row.tituloDepois || row.tituloAntes,
+    );
   if (quality === "missingBrand") return !isValidBrand(row.marca);
   if (quality === "missingTags")
-    return !hasCatalogValue(row.tagsDepois || row.tagsAntes);
+    return !hasCatalogValue(
+      currentCatalog ? row.tagsDepois : row.tagsDepois || row.tagsAntes,
+    );
   if (quality === "missingCollection")
-    return !hasCatalogValue(row.colecoesDepois || row.colecoesAntes);
+    return !hasCatalogValue(
+      currentCatalog ? row.colecoesDepois : row.colecoesDepois || row.colecoesAntes,
+    );
   if (quality === "missingSku") return !hasCatalogValue(row.sku);
   if (quality === "errors") return row.status.toLowerCase().startsWith("erro");
   return true;
@@ -298,6 +306,12 @@ export function buildDashboard(
   const currentEnd = fullPeriod
     ? Number.POSITIVE_INFINITY
     : (currentRange?.end ?? now);
+  const monthParts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const currentMonth = `${monthParts.find((part) => part.type === "year")?.value}-${monthParts.find((part) => part.type === "month")?.value}`;
   const requestedComparison = /^\d{4}-\d{2}$/.test(options.compareMonth || "")
     ? options.compareMonth!
     : validMonth
@@ -306,9 +320,12 @@ export function buildDashboard(
   const comparisonRange = requestedComparison
     ? monthRange(requestedComparison)
     : null;
-  const previousStart =
-    comparisonRange?.start ?? currentStart - days * 86400000;
-  const previousEnd = comparisonRange?.end ?? currentStart;
+  const previousStart = fullPeriod
+    ? Number.NEGATIVE_INFINITY
+    : (comparisonRange?.start ?? currentStart - days * 86400000);
+  const previousEnd = fullPeriod
+    ? monthRange(currentMonth).start
+    : (comparisonRange?.end ?? currentStart);
   const filters = {
     q: (options.q || "").toLowerCase(),
     marca: options.marca || "",
@@ -325,7 +342,7 @@ export function buildDashboard(
         date.getTime() >= currentStart &&
         date.getTime() < currentEnd &&
         matches(row, filters) &&
-        matchesQuality(row, options.quality || "")
+        matchesQuality(row, options.quality || "", options.catalog)
       );
     })
     .sort(
@@ -336,7 +353,7 @@ export function buildDashboard(
   const catalogRows = sourceRows
     .filter(
       (row) =>
-        matches(row, filters) && matchesQuality(row, options.quality || ""),
+        matches(row, filters) && matchesQuality(row, options.quality || "", options.catalog),
     )
     .sort(
       (a, b) =>
@@ -348,7 +365,7 @@ export function buildDashboard(
   // A planilha já descarta linhas totalmente vazias durante a leitura.
   const currentRows = options.catalog ? catalogRows : periodRows;
   const previousRows =
-    options.catalog || fullPeriod
+    options.catalog
       ? []
       : sourceRows.filter((row) => {
           const date = parseHistoryDate(row.dataHora);
@@ -357,7 +374,7 @@ export function buildDashboard(
             date.getTime() >= previousStart &&
             date.getTime() < previousEnd &&
             matches(row, filters) &&
-            matchesQuality(row, options.quality || "")
+            matchesQuality(row, options.quality || "", options.catalog)
           );
         });
   const metrics = calculateMetrics(currentRows, timeSettings);
@@ -366,7 +383,7 @@ export function buildDashboard(
     total: percentageChange(metrics.total, previous.total),
     sucesso: percentageChange(metrics.sucesso, previous.sucesso),
     erros: percentageChange(metrics.erros, previous.erros),
-    taxaSucesso: previous.taxaSucesso
+    taxaSucesso: previous.total > 0
       ? metrics.taxaSucesso - previous.taxaSucesso
       : null,
     titulosAlterados: percentageChange(
@@ -429,10 +446,14 @@ export function buildDashboard(
       ),
     ].sort((a, b) => a.localeCompare(b, "pt-BR")),
     comparison: {
-      available: !fullPeriod && previousRows.length > 0,
-      label: requestedComparison
-        ? monthLabel(requestedComparison)
-        : "período anterior",
+      available: previousRows.length > 0,
+      previousTotal: previous.total,
+      previousErrors: previous.erros,
+      label: fullPeriod
+        ? `fim de ${monthLabel(previousMonthOf(currentMonth))}`
+        : requestedComparison
+          ? monthLabel(requestedComparison)
+          : "período anterior",
     },
   };
 }
