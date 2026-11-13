@@ -1854,6 +1854,32 @@ export async function listLatestProcessingResults(): Promise<
   }));
 }
 
+export async function listProcessingHistoryResults(): Promise<
+  LatestReprocessResult[]
+> {
+  await ensureDatabase();
+  const rows = await query<{
+    sku: string;
+    title: string;
+    created_at: unknown;
+    result_json: unknown;
+  }>(`
+    SELECT sku, title, created_at, result_json
+    FROM reprocess_jobs
+    WHERE status = 'enviado'
+      AND result_json IS NOT NULL
+      AND TRIM(sku) <> ''
+      AND (source = 'reprocess' OR (source = 'products' AND result_json->>'origem' = 'ChatGPT'))
+    ORDER BY created_at DESC, id DESC
+  `);
+  return rows.map((row) => ({
+    sku: row.sku,
+    title: row.title,
+    createdAt: iso(row.created_at),
+    result: jsonObject(row.result_json),
+  }));
+}
+
 export async function listLatestProductAutomationResults(): Promise<
   LatestReprocessResult[]
 > {
