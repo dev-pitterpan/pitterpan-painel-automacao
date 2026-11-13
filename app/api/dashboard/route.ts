@@ -71,7 +71,8 @@ export async function GET(req: NextRequest) {
         };
       });
     const includeReprocess = params.get("includeReprocess") === "1";
-    const includeCodex = !historicalView && params.get("includeCodex") !== "0";
+    const includeCodex = params.get("includeCodex") === "1" ||
+      (!historicalView && params.get("includeCodex") !== "0");
     const dashboardRows = [...rows];
     const errorRows = [...rows];
     {
