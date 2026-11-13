@@ -13,6 +13,7 @@ import {
   buildDashboard,
   calculateCatalogQuality,
   latestHistoryRowsByProduct,
+  historyDateKey,
 } from "@/lib/metrics";
 
 export async function GET(req: NextRequest) {
@@ -205,8 +206,23 @@ export async function GET(req: NextRequest) {
       latestPerProduct: true,
     }).rows;
     const catalogQuality = calculateCatalogQuality(qualityRows);
+    const monthParts = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(new Date());
+    const currentMonth = `${monthParts.find((part) => part.type === "year")?.value}-${monthParts.find((part) => part.type === "month")?.value}`;
+    const previousErrors = dashboardOptions.month === "all"
+      ? latestHistoryRowsByProduct(
+          errorRows.filter((row) => {
+            const month = historyDateKey(row.dataHora)?.slice(0, 7);
+            return month !== undefined && month < currentMonth;
+          }),
+        ).filter((row) => row.status.toLowerCase().startsWith("erro")).length
+      : dashboard.comparison.previousErrors;
     return NextResponse.json({
       ...dashboard,
+      comparison: { ...dashboard.comparison, previousErrors },
       catalogQuality,
       permissions: {
         canReprocess: user.role === "admin",
