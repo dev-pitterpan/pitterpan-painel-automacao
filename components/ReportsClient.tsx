@@ -384,7 +384,7 @@ export function ReportsClient() {
       .sort((a, b) => b.sort - a.sort)
       .map((item) => ({
         ...item,
-        minutes: calculateTimeSavedMinutes(item.total, timeSettings),
+        minutes: calculateTimeSavedMinutes(item.successes, timeSettings),
       }));
   }, [filteredRows, timeSettings]);
   const summaries = useMemo(
@@ -402,12 +402,9 @@ export function ReportsClient() {
           .map((row, index) => reportProductKey(row, String(index))),
       ).size,
       errors: filteredRows.filter(isError).length,
-      time: calculateTimeSavedMinutes(
-        filteredRows.filter((row) => !isError(row)).length,
-        timeSettings,
-      ),
+      time: productivityRows.reduce((total, row) => total + row.minutes, 0),
     }),
-    [filteredRows, generations, start, end, timeSettings],
+    [filteredRows, generations, productivityRows, start, end],
   );
 
   const previewCount =
