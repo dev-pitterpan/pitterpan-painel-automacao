@@ -279,6 +279,8 @@ const Metric = ({
   note,
   comparison,
   comparisonLabel = "mês anterior",
+  comparisonUnit = "%",
+  zeroBase = false,
   inverse = false,
   icon: Icon,
   imageSrc,
@@ -290,6 +292,8 @@ const Metric = ({
   note?: string;
   comparison?: number | null;
   comparisonLabel?: string;
+  comparisonUnit?: "%" | "p.p.";
+  zeroBase?: boolean;
   inverse?: boolean;
   icon?: LucideIcon;
   imageSrc?: string;
@@ -333,14 +337,18 @@ const Metric = ({
               className={`metric-comparison ${comparison === null || normalizedComparison === 0 ? "is-neutral" : normalizedComparison! >= 0 !== inverse ? "is-positive" : "is-negative"}`}
             >
               {comparison === null ? (
-                <span title="Não existem registros no período escolhido para comparação.">
-                  Sem base <span aria-hidden="true">ⓘ</span>
-                </span>
+                zeroBase ? (
+                  <span title="O mês anterior tinha valor zero; não existe porcentagem de crescimento definida.">Novo</span>
+                ) : (
+                  <span title="Não existem registros no período escolhido para comparação.">
+                    Sem base <span aria-hidden="true">ⓘ</span>
+                  </span>
+                )
               ) : (
-                `${normalizedComparison === 0 ? "→" : normalizedComparison! > 0 ? "↑" : "↓"} ${normalizedComparison! > 0 ? "+" : ""}${normalizedComparison}%`
+                `${normalizedComparison === 0 ? "→" : normalizedComparison! > 0 ? "↑" : "↓"} ${normalizedComparison! > 0 ? "+" : ""}${normalizedComparison}${comparisonUnit}`
               )}
             </div>
-            {comparison !== null && (
+            {(comparison !== null || zeroBase) && (
               <span className="metric-previous">vs. {comparisonLabel}</span>
             )}
           </div>
@@ -683,17 +691,37 @@ export function DashboardClient({
   }, [data, errorOverviewRows]);
   const currentDashboardMetrics = useMemo(() => {
     const total = data?.metrics.total || 0;
-    const errors = Math.min(
-      total,
-      Math.max(0, data?.source?.currentErrors ?? data?.metrics.erros ?? 0),
-    );
+    const fullPeriod = appliedFilters.month === "all";
+    const errors = fullPeriod
+      ? Math.min(total, Math.max(0, data?.source?.currentErrors ?? data?.metrics.erros ?? 0))
+      : Math.min(total, Math.max(0, data?.metrics.erros ?? 0));
     const success = Math.max(0, total - errors);
+    const successRate = total ? (success / total) * 100 : 0;
+    const previousTotal = data?.comparison.previousTotal ?? 0;
+    const previousErrors = Math.min(
+      previousTotal,
+      Math.max(0, data?.comparison.previousErrors ?? 0),
+    );
+    const previousSuccess = previousTotal - previousErrors;
+    const percentChange = (current: number, previous: number) =>
+      previous === 0 ? (current === 0 ? 0 : null) : ((current - previous) / previous) * 100;
     return {
       errors,
       success,
-      successRate: total ? (success / total) * 100 : 0,
+      successRate,
+      successComparison: data?.comparison.available
+        ? percentChange(success, previousSuccess)
+        : null,
+      errorsComparison: data?.comparison.available
+        ? percentChange(errors, previousErrors)
+        : null,
+      rateComparison: data?.comparison.available
+        ? successRate - (previousTotal ? (previousSuccess / previousTotal) * 100 : 0)
+        : null,
+      successZeroBase: data?.comparison.available && previousSuccess === 0 && success > 0,
+      errorsZeroBase: data?.comparison.available && previousErrors === 0 && errors > 0,
     };
-  }, [data]);
+  }, [data, appliedFilters.month]);
   const processedFacets = useMemo<ProcessedFacets>(() => {
     const rows = data?.rows || [];
     const unique = (values: string[]) =>
@@ -1913,7 +1941,8 @@ export function DashboardClient({
             <Metric
               label="Sucesso"
               value={currentDashboardMetrics.success}
-              comparison={null}
+              comparison={currentDashboardMetrics.successComparison}
+              zeroBase={currentDashboardMetrics.successZeroBase}
               comparisonLabel={data.comparison.label}
               imageSrc="/icons/verificar.png"
               href="/produtos/processados?status=sucesso"
@@ -1922,7 +1951,8 @@ export function DashboardClient({
             <Metric
               label="Erros"
               value={currentDashboardMetrics.errors}
-              comparison={null}
+              comparison={currentDashboardMetrics.errorsComparison}
+              zeroBase={currentDashboardMetrics.errorsZeroBase}
               comparisonLabel={data.comparison.label}
               inverse
               imageSrc="/icons/botao-x.png"
@@ -1932,7 +1962,8 @@ export function DashboardClient({
             <Metric
               label="Taxa de sucesso"
               value={`${currentDashboardMetrics.successRate.toFixed(2)}%`}
-              comparison={null}
+              comparison={currentDashboardMetrics.rateComparison}
+              comparisonUnit="p.p."
               comparisonLabel={data.comparison.label}
               imageSrc="/icons/percentagem.png"
               tone="violet"
