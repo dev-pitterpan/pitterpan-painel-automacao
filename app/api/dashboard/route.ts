@@ -4,6 +4,7 @@ import {
   getCurrentUser,
   isSuccessfulReprocessResult,
   listLatestProcessingResults,
+  listProcessingHistoryResults,
   getProductOverrides,
   getShopifyCatalogProductsBySkus,
   productIdentityKey,
@@ -76,7 +77,9 @@ export async function GET(req: NextRequest) {
     const dashboardRows = [...rows];
     const errorRows = [...rows];
     {
-      const latestReprocesses = await listLatestProcessingResults();
+      const latestReprocesses = historicalView
+        ? await listProcessingHistoryResults()
+        : await listLatestProcessingResults();
       const latestSheetRowBySku = new Map<string, (typeof rows)[number]>();
       const sheetCodexResults = new Set(
         rows
