@@ -112,12 +112,10 @@ export function calculateCatalogQuality(rows: HistoryRow[]) {
 
   products.forEach((row) => {
     const issues = {
-      missingTitle: !hasCatalogValue(row.tituloDepois || row.tituloAntes),
+      missingTitle: !hasCatalogValue(row.tituloDepois),
       missingBrand: !isValidBrand(row.marca),
-      missingTags: !hasCatalogValue(row.tagsDepois || row.tagsAntes),
-      missingCollection: !hasCatalogValue(
-        row.colecoesDepois || row.colecoesAntes,
-      ),
+      missingTags: !hasCatalogValue(row.tagsDepois),
+      missingCollection: !hasCatalogValue(row.colecoesDepois),
       missingSku: !hasCatalogValue(row.sku),
       errors: row.status.toLowerCase().startsWith("erro"),
     };
@@ -210,15 +208,25 @@ function monthLabel(month: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function matchesQuality(row: HistoryRow, quality: string) {
+function matchesQuality(
+  row: HistoryRow,
+  quality: string,
+  currentCatalog = false,
+) {
   if (!quality) return true;
   if (quality === "missingTitle")
-    return !hasCatalogValue(row.tituloDepois || row.tituloAntes);
+    return !hasCatalogValue(
+      currentCatalog ? row.tituloDepois : row.tituloDepois || row.tituloAntes,
+    );
   if (quality === "missingBrand") return !isValidBrand(row.marca);
   if (quality === "missingTags")
-    return !hasCatalogValue(row.tagsDepois || row.tagsAntes);
+    return !hasCatalogValue(
+      currentCatalog ? row.tagsDepois : row.tagsDepois || row.tagsAntes,
+    );
   if (quality === "missingCollection")
-    return !hasCatalogValue(row.colecoesDepois || row.colecoesAntes);
+    return !hasCatalogValue(
+      currentCatalog ? row.colecoesDepois : row.colecoesDepois || row.colecoesAntes,
+    );
   if (quality === "missingSku") return !hasCatalogValue(row.sku);
   if (quality === "errors") return row.status.toLowerCase().startsWith("erro");
   return true;
@@ -325,7 +333,7 @@ export function buildDashboard(
         date.getTime() >= currentStart &&
         date.getTime() < currentEnd &&
         matches(row, filters) &&
-        matchesQuality(row, options.quality || "")
+        matchesQuality(row, options.quality || "", options.catalog)
       );
     })
     .sort(
@@ -336,7 +344,7 @@ export function buildDashboard(
   const catalogRows = sourceRows
     .filter(
       (row) =>
-        matches(row, filters) && matchesQuality(row, options.quality || ""),
+        matches(row, filters) && matchesQuality(row, options.quality || "", options.catalog),
     )
     .sort(
       (a, b) =>
@@ -357,7 +365,7 @@ export function buildDashboard(
             date.getTime() >= previousStart &&
             date.getTime() < previousEnd &&
             matches(row, filters) &&
-            matchesQuality(row, options.quality || "")
+            matchesQuality(row, options.quality || "", options.catalog)
           );
         });
   const metrics = calculateMetrics(currentRows, timeSettings);
