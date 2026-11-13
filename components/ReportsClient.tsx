@@ -31,13 +31,6 @@ import { ProductThumbnail } from "@/components/ProductThumbnail";
 
 type ReportKind =
   "executivo" | "marca" | "erros" | "alteracoes" | "produtividade";
-type AppliedFilters = {
-  start: string;
-  end: string;
-  brand: string;
-  status: string;
-  change: string;
-};
 type ExportItem = {
   id: string;
   createdAt: string;
@@ -167,7 +160,6 @@ export function ReportsClient() {
   const [brand, setBrand] = useState("");
   const [status, setStatus] = useState("");
   const [change, setChange] = useState("");
-  const [applied, setApplied] = useState<AppliedFilters | null>(null);
   const [reportKind, setReportKind] = useState<ReportKind>("executivo");
   const [selectedReports, setSelectedReports] = useState<ReportKind[]>([
     "executivo",
@@ -204,7 +196,7 @@ export function ReportsClient() {
     setError("");
     try {
       const response = await fetch(
-        `/api/dashboard?month=all&historicalView=1${refresh ? "&refresh=1" : ""}`,
+        `/api/dashboard?month=all&historicalView=1&includeCodex=1&includeReprocess=1${refresh ? "&refresh=1" : ""}`,
         { cache: "no-store" },
       );
       const data = (await response.json()) as DashboardData & {
@@ -231,10 +223,6 @@ export function ReportsClient() {
     setExports(readStorage<ExportItem[]>("pitter-report-exports", []));
     setGenerations(readStorage<string[]>("pitter-report-generations", []));
   }, []);
-  useEffect(() => {
-    if (!applied && allRows.length)
-      setApplied({ start, end, brand, status, change });
-  }, [allRows, applied, start, end, brand, status, change]);
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 2800);
@@ -280,19 +268,30 @@ export function ReportsClient() {
     [allRows],
   );
   const filteredRows = useMemo(() => {
-    const filters = applied || { start, end, brand, status, change };
-    return allRows
+    const latestByProduct = new Map<string, HistoryRow>();
+    allRows.forEach((row, index) => {
+      const date = historyDateKey(row.dataHora);
+      if (!date || date < start || date > end) return;
+      const key = reportProductKey(row, String(index));
+      const previous = latestByProduct.get(key);
+      if (
+        !previous ||
+        (parseHistoryDate(row.dataHora)?.getTime() || 0) >=
+          (parseHistoryDate(previous.dataHora)?.getTime() || 0)
+      ) {
+        latestByProduct.set(key, row);
+      }
+    });
+    return [...latestByProduct.values()]
       .filter((row) => {
-        const date = historyDateKey(row.dataHora);
-        if (!date || date < filters.start || date > filters.end) return false;
-        if (filters.brand && row.marca !== filters.brand) return false;
-        if (filters.status === "sucesso" && isError(row)) return false;
-        if (filters.status === "erro" && !isError(row)) return false;
-        if (filters.change === "titulo" && !row.tituloAlterado) return false;
-        if (filters.change === "tags" && !row.tagsAlteradas) return false;
-        if (filters.change === "colecoes" && !row.colecoesAlteradas)
+        if (brand && row.marca !== brand) return false;
+        if (status === "sucesso" && isError(row)) return false;
+        if (status === "erro" && !isError(row)) return false;
+        if (change === "titulo" && !row.tituloAlterado) return false;
+        if (change === "tags" && !row.tagsAlteradas) return false;
+        if (change === "colecoes" && !row.colecoesAlteradas)
           return false;
-        if (filters.change === "descricao" && !row.descricaoGerada)
+        if (change === "descricao" && !row.descricaoGerada)
           return false;
         return true;
       })
@@ -301,7 +300,7 @@ export function ReportsClient() {
           (parseHistoryDate(b.dataHora)?.getTime() || 0) -
           (parseHistoryDate(a.dataHora)?.getTime() || 0),
       );
-  }, [allRows, applied, start, end, brand, status, change]);
+  }, [allRows, start, end, brand, status, change]);
 
   const distinctProcessedProducts = useMemo(
     () =>
@@ -385,7 +384,7 @@ export function ReportsClient() {
       .sort((a, b) => b.sort - a.sort)
       .map((item) => ({
         ...item,
-        minutes: calculateTimeSavedMinutes(item.total, timeSettings),
+        minutes: calculateTimeSavedMinutes(item.successes, timeSettings),
       }));
   }, [filteredRows, timeSettings]);
   const summaries = useMemo(
@@ -393,8 +392,8 @@ export function ReportsClient() {
       generated: generations.filter((createdAt) => {
         const parts = createdAt.split(",")[0].split("/");
         const date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T12:00:00`);
-        const from = new Date(`${(applied || { start }).start}T00:00:00`);
-        const to = new Date(`${(applied || { end }).end}T23:59:59`);
+        const from = new Date(`${start}T00:00:00`);
+        const to = new Date(`${end}T23:59:59`);
         return !Number.isNaN(date.getTime()) && date >= from && date <= to;
       }).length,
       changed: new Set(
@@ -403,9 +402,9 @@ export function ReportsClient() {
           .map((row, index) => reportProductKey(row, String(index))),
       ).size,
       errors: filteredRows.filter(isError).length,
-      time: calculateTimeSavedMinutes(filteredRows.length, timeSettings),
+      time: productivityRows.reduce((total, row) => total + row.minutes, 0),
     }),
-    [filteredRows, generations, applied, start, end, timeSettings],
+    [filteredRows, generations, productivityRows, start, end],
   );
 
   const previewCount =
@@ -474,7 +473,6 @@ export function ReportsClient() {
     setBrand("");
     setStatus("");
     setChange("");
-    setApplied({ ...defaultFilters, brand: "", status: "", change: "" });
     setPage(1);
     setShowAll(false);
     setSelectingEnd(false);
@@ -486,7 +484,6 @@ export function ReportsClient() {
       setToast("A data inicial deve ser anterior à data final.");
       return;
     }
-    setApplied({ start, end, brand, status, change });
     setPage(1);
     setShowAll(false);
     const nextGenerations = [
@@ -546,12 +543,11 @@ export function ReportsClient() {
     rows: number,
     format: "XLSX" | "CSV",
   ) {
-    const filters = applied || { start, end };
     const item: ExportItem = {
       id: crypto.randomUUID(),
       createdAt: new Date().toLocaleString("pt-BR"),
       report,
-      period: `${formatDateInput(filters.start)} a ${formatDateInput(filters.end)}`,
+      period: `${formatDateInput(start)} a ${formatDateInput(end)}`,
       rows,
       status: "Concluído",
       format,
@@ -576,7 +572,7 @@ export function ReportsClient() {
       workbook.creator = "Catálogo Pro";
       workbook.created = new Date();
 
-      const filters = applied || { start, end, brand, status, change };
+      const filters = { start, end, brand, status, change };
       const historyHeaders = [
         "Data/Hora",
         "SKU",
@@ -863,7 +859,7 @@ export function ReportsClient() {
       </div>
     );
 
-  const filters = applied || { start, end, brand, status, change };
+  const filters = { start, end, brand, status, change };
   const reportCards: Array<{
     kind: ReportKind;
     icon: typeof FileText;
@@ -1132,10 +1128,7 @@ export function ReportsClient() {
           <div>
             <span>Produtos processados</span>
             <strong>{filteredRows.length.toLocaleString("pt-BR")}</strong>
-            <small>
-              {distinctProcessedProducts.toLocaleString("pt-BR")} combinações de
-              SKU e produto
-            </small>
+            <small>Resultado mais recente de cada produto no período</small>
           </div>
         </article>
         <article className="report-stat">
@@ -1145,7 +1138,7 @@ export function ReportsClient() {
           <div>
             <span>Erros no período</span>
             <strong>{summaries.errors.toLocaleString("pt-BR")}</strong>
-            <small>No período selecionado</small>
+            <small>Produtos cujo último resultado no período foi erro</small>
           </div>
         </article>
         <article className="report-stat">
@@ -1156,8 +1149,8 @@ export function ReportsClient() {
             <span>Tempo economizado no período</span>
             <strong>{fmtMinutes(summaries.time)}</strong>
             <small>
-              {timeSettings.manualSecondsPerProduct}s manual por produto − lotes
-              de {timeSettings.batchSize} em {timeSettings.batchSeconds}s
+              Estimativa para produtos concluídos: {timeSettings.manualSecondsPerProduct}s
+              manual por produto − lotes de {timeSettings.batchSize} em {timeSettings.batchSeconds}s
             </small>
           </div>
         </article>
