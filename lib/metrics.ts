@@ -141,7 +141,7 @@ export function calculateCatalogQuality(rows: HistoryRow[]) {
 }
 
 function percentageChange(current: number, previous: number) {
-  if (previous === 0) return null;
+  if (previous === 0) return current === 0 ? 0 : null;
   return ((current - previous) / previous) * 100;
 }
 
@@ -306,6 +306,12 @@ export function buildDashboard(
   const currentEnd = fullPeriod
     ? Number.POSITIVE_INFINITY
     : (currentRange?.end ?? now);
+  const monthParts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const currentMonth = `${monthParts.find((part) => part.type === "year")?.value}-${monthParts.find((part) => part.type === "month")?.value}`;
   const requestedComparison = /^\d{4}-\d{2}$/.test(options.compareMonth || "")
     ? options.compareMonth!
     : validMonth
@@ -314,9 +320,12 @@ export function buildDashboard(
   const comparisonRange = requestedComparison
     ? monthRange(requestedComparison)
     : null;
-  const previousStart =
-    comparisonRange?.start ?? currentStart - days * 86400000;
-  const previousEnd = comparisonRange?.end ?? currentStart;
+  const previousStart = fullPeriod
+    ? Number.NEGATIVE_INFINITY
+    : (comparisonRange?.start ?? currentStart - days * 86400000);
+  const previousEnd = fullPeriod
+    ? monthRange(currentMonth).start
+    : (comparisonRange?.end ?? currentStart);
   const filters = {
     q: (options.q || "").toLowerCase(),
     marca: options.marca || "",
@@ -356,7 +365,7 @@ export function buildDashboard(
   // A planilha já descarta linhas totalmente vazias durante a leitura.
   const currentRows = options.catalog ? catalogRows : periodRows;
   const previousRows =
-    options.catalog || fullPeriod
+    options.catalog
       ? []
       : sourceRows.filter((row) => {
           const date = parseHistoryDate(row.dataHora);
@@ -374,7 +383,7 @@ export function buildDashboard(
     total: percentageChange(metrics.total, previous.total),
     sucesso: percentageChange(metrics.sucesso, previous.sucesso),
     erros: percentageChange(metrics.erros, previous.erros),
-    taxaSucesso: previous.taxaSucesso
+    taxaSucesso: previous.total > 0
       ? metrics.taxaSucesso - previous.taxaSucesso
       : null,
     titulosAlterados: percentageChange(
@@ -437,10 +446,14 @@ export function buildDashboard(
       ),
     ].sort((a, b) => a.localeCompare(b, "pt-BR")),
     comparison: {
-      available: !fullPeriod && previousRows.length > 0,
-      label: requestedComparison
-        ? monthLabel(requestedComparison)
-        : "período anterior",
+      available: previousRows.length > 0,
+      previousTotal: previous.total,
+      previousErrors: previous.erros,
+      label: fullPeriod
+        ? `fim de ${monthLabel(previousMonthOf(currentMonth))}`
+        : requestedComparison
+          ? monthLabel(requestedComparison)
+          : "período anterior",
     },
   };
 }
