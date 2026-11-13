@@ -55,10 +55,10 @@ export async function GET(req: NextRequest) {
           return {
             ...row,
             shopifyId: catalogProduct.shopifyId,
-            tituloDepois: catalogProduct.title || row.tituloDepois,
+            tituloDepois: catalogProduct.title,
             tagsDepois: catalogProduct.tags.join(", "),
             colecoesDepois: catalogProduct.collections.join(", "),
-            marca: catalogProduct.vendor || row.marca,
+            marca: catalogProduct.vendor,
             tipoProduto: catalogProduct.productType,
           };
         if (!override) return row;
@@ -165,10 +165,10 @@ export async function GET(req: NextRequest) {
         {
           ...row,
           shopifyId: catalogProduct.shopifyId,
-          tituloDepois: catalogProduct.title || row.tituloDepois,
+          tituloDepois: catalogProduct.title,
           tagsDepois: catalogProduct.tags.join(", "),
           colecoesDepois: catalogProduct.collections.join(", "),
-          marca: catalogProduct.vendor || row.marca,
+          marca: catalogProduct.vendor,
           tipoProduto: catalogProduct.productType,
         },
       ];
