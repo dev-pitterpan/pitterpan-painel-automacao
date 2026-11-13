@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   AreaChart,
@@ -80,6 +81,8 @@ const QUALITY_LABELS: Record<string, string> = {
   errors: "Com erro",
 };
 const PRODUCTS_PER_PAGE = 100;
+const HOME_CACHE_MS = 5 * 60_000;
+const homeCache = new Map<string, { data: DashboardData; loadedAt: number }>();
 const EMPTY_CATALOG_VALUES = new Set([
   "",
   "-",
@@ -293,6 +296,7 @@ const Metric = ({
   href?: string;
   tone?: "blue" | "green" | "red" | "gold" | "violet";
 }) => {
+  const router = useRouter();
   const roundedComparison =
     comparison === null || comparison === undefined
       ? comparison
@@ -305,10 +309,10 @@ const Metric = ({
       className={`metric-card metric-${tone} ${href ? "is-clickable" : ""}`}
       role={href ? "link" : undefined}
       tabIndex={href ? 0 : undefined}
-      onClick={() => href && window.location.assign(href)}
+      onClick={() => href && router.push(href)}
       onKeyDown={(event) => {
         if (href && (event.key === "Enter" || event.key === " "))
-          window.location.assign(href);
+          router.push(href);
       }}
     >
       <div className="metric-top">
@@ -448,11 +452,14 @@ export function DashboardClient({
   mode = "dashboard",
   greetingName,
   loginTransition = false,
+  userId,
 }: {
   mode?: "dashboard" | "products" | "errors";
   greetingName?: string;
   loginTransition?: boolean;
+  userId?: number;
 }) {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [errorOverviewRows, setErrorOverviewRows] = useState<HistoryRow[]>([]);
   const [error, setError] = useState("");
@@ -503,7 +510,6 @@ export function DashboardClient({
     "unknown" | "operational" | "warning" | "error"
   >("unknown");
   const loadRequestId = useRef(0);
-  const lastDashboardFocusRefresh = useRef(Date.now());
   const { activeProductKey, openProduct } = useProductPanel();
 
   useEffect(() => {
@@ -822,10 +828,7 @@ export function DashboardClient({
 
   async function load(refresh = false) {
     const requestId = ++loadRequestId.current;
-    setLoading(true);
-    setLoadingExiting(false);
-    setError("");
-
+    let servedFromCache = false;
     try {
       const p = new URLSearchParams({
         days: appliedFilters.days,
@@ -854,6 +857,28 @@ export function DashboardClient({
       if (refresh) {
         p.set("refresh", "1");
       }
+
+      const cacheParams = new URLSearchParams(p);
+      cacheParams.delete("refresh");
+      const cacheKey = JSON.stringify([userId, cacheParams.toString()]);
+      const cached =
+        mode === "dashboard" && !refresh ? homeCache.get(cacheKey) : undefined;
+      if (cached && Date.now() - cached.loadedAt < HOME_CACHE_MS) {
+        servedFromCache = true;
+        setData(cached.data);
+        setBrandOverview({
+          byBrand: cached.data.byBrand,
+          total: cached.data.metrics.total,
+        });
+        setLoading(false);
+        setLoadingExiting(false);
+        setError("");
+        return;
+      }
+
+      setLoading(true);
+      setLoadingExiting(false);
+      setError("");
 
       const response = await fetch(`/api/dashboard?${p.toString()}`, {
         cache: "no-store",
@@ -898,6 +923,7 @@ export function DashboardClient({
         byBrand: Array.isArray(json.byBrand) ? json.byBrand : [],
 
         brands: Array.isArray(json.brands) ? json.brands : [],
+        catalogQuality: json.catalogQuality,
         permissions: json.permissions,
         source: json.source,
         comparison: json.comparison || {
@@ -907,6 +933,10 @@ export function DashboardClient({
       };
 
       setData(safeData);
+      if (mode === "dashboard") {
+        if (homeCache.size >= 12) homeCache.clear();
+        homeCache.set(cacheKey, { data: safeData, loadedAt: Date.now() });
+      }
       if (!refresh) {
         setMissingSkus(
           missingSkuTerms(
@@ -953,7 +983,7 @@ export function DashboardClient({
           : "Erro desconhecido ao carregar o dashboard.",
       );
     } finally {
-      if (requestId !== loadRequestId.current) return;
+      if (requestId !== loadRequestId.current || servedFromCache) return;
       setLoading(false);
       setLoadingProgress(100);
       setLoadingExiting(true);
@@ -965,22 +995,6 @@ export function DashboardClient({
     load();
   }, [appliedFilters, filtersReady, mode]);
 
-  useEffect(() => {
-    if (!filtersReady || mode !== "dashboard") return;
-    const refreshOnReturn = () => {
-      if (document.visibilityState !== "visible") return;
-      const now = Date.now();
-      if (now - lastDashboardFocusRefresh.current < 30_000) return;
-      lastDashboardFocusRefresh.current = now;
-      void load();
-    };
-    window.addEventListener("focus", refreshOnReturn);
-    document.addEventListener("visibilitychange", refreshOnReturn);
-    return () => {
-      window.removeEventListener("focus", refreshOnReturn);
-      document.removeEventListener("visibilitychange", refreshOnReturn);
-    };
-  }, [appliedFilters, filtersReady, mode]);
 
   useEffect(() => {
     if (!filtersReady || mode !== "dashboard" || !appliedFilters.marca) return;
@@ -2242,9 +2256,7 @@ export function DashboardClient({
                       className={`quality-item tone-${item.tone}`}
                       key={item.label}
                       onClick={() =>
-                        window.location.assign(
-                          `/produtos/processados?quality=${item.key}`,
-                        )
+                        router.push(`/produtos/processados?quality=${item.key}`)
                       }
                       title={`Ver produtos: ${item.label.toLowerCase()}`}
                     >
@@ -2262,7 +2274,7 @@ export function DashboardClient({
               <div className="quality-summary">
                 <span>
                   <b>{catalogQuality.total.toLocaleString("pt-BR")}</b> produtos
-                  únicos avaliados
+                  com SKU no histórico avaliados
                 </span>
                 <span>
                   <b>{data.metrics.titulosAlterados.toLocaleString("pt-BR")}</b>{" "}
@@ -2674,7 +2686,7 @@ export function DashboardClient({
               <button
                 type="button"
                 className="btn"
-                onClick={() => window.location.assign("/produtos/processados")}
+                onClick={() => router.push("/produtos/processados")}
               >
                 Ver todos os produtos
               </button>
