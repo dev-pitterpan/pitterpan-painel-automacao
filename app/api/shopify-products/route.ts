@@ -83,6 +83,7 @@ function productFromPayload(value: any): ShopifyCatalogSyncProduct {
     totalInventory: Number(value?.totalInventory || 0),
     priceMin: Number(value?.priceMin || 0),
     priceMax: Number(value?.priceMax || 0),
+    shopifyCreatedAt: text(value?.shopifyCreatedAt || value?.createdAt, 80),
     shopifyUpdatedAt: text(value?.shopifyUpdatedAt || value?.updatedAt, 80),
   };
 }
@@ -172,10 +173,11 @@ export async function GET(req: NextRequest) {
         collection: params.get("collection") || "",
         productType: params.get("productType") || "",
         winthorStatus: params.get("winthorStatus") || "",
+        createdWithinDays: Number(params.get("createdWithinDays") || 0),
         page: Number(params.get("page") || 1),
         perPage: Number(params.get("perPage") || 50),
         sort: (params.get("sort") || "updated") as
-          "updated" | "title" | "title_desc" | "inventory",
+          "updated" | "created" | "title" | "title_desc" | "inventory",
       }),
       params.get("facets") === "1"
         ? getShopifyCatalogFacets()
@@ -279,3 +281,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+
