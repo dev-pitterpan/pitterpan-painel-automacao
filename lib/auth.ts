@@ -109,6 +109,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const globalForDb = globalThis as typeof globalThis & {
   prismaPostgresClient?: Client;
+  catalogCreatedAtReady?: Promise<void>;
 };
 
 function getDatabaseClient() {
@@ -133,10 +134,43 @@ async function query<T = Record<string, unknown>>(
   ) as T[];
 }
 
-// O schema é aplicado explicitamente por npm run db:setup. Evita dezenas de
-// operações DDL a cada nova instância serverless do Vercel.
 async function ensureDatabase() {
-  return;
+  if (!globalForDb.catalogCreatedAtReady) {
+    globalForDb.catalogCreatedAtReady = (async () => {
+      const columns = await query<{ table_name: string }>(
+        `SELECT table_name FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name IN ('shopify_catalog_products', 'shopify_catalog_staging')
+           AND column_name = 'shopify_created_at'`,
+      );
+      const present = new Set(columns.map((row) => row.table_name));
+      if (!present.has('shopify_catalog_products')) {
+        await query(
+          'ALTER TABLE shopify_catalog_products ADD COLUMN IF NOT EXISTS shopify_created_at TIMESTAMPTZ',
+        );
+      }
+      if (!present.has('shopify_catalog_staging')) {
+        await query(
+          'ALTER TABLE shopify_catalog_staging ADD COLUMN IF NOT EXISTS shopify_created_at TIMESTAMPTZ',
+        );
+      }
+      const indexes = await query<{ indexname: string }>(
+        `SELECT indexname FROM pg_indexes
+         WHERE schemaname = 'public'
+           AND tablename = 'shopify_catalog_products'
+           AND indexname = 'idx_shopify_catalog_created'`,
+      );
+      if (!indexes.length) {
+        await query(
+          'CREATE INDEX IF NOT EXISTS idx_shopify_catalog_created ON shopify_catalog_products(shopify_created_at DESC)',
+        );
+      }
+    })().catch((error) => {
+      globalForDb.catalogCreatedAtReady = undefined;
+      throw error;
+    });
+  }
+  return globalForDb.catalogCreatedAtReady;
 }
 
 function normalizeEmail(email: string) {
@@ -2019,5 +2053,6 @@ export const getCurrentUser = cache(async () => {
 export async function getAuthenticatedUser() {
   return await getCurrentUser();
 }
+
 
 
