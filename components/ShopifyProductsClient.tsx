@@ -237,8 +237,10 @@ function FilterPicker({
 
 export function ShopifyProductsClient({
   winthorOnly = false,
+  recentOnly = false,
 }: {
   winthorOnly?: boolean;
+  recentOnly?: boolean;
 }) {
   const { activeProductKey, openProduct } = useProductPanel();
   const automationProgress = useAutomationProgress();
@@ -254,7 +256,10 @@ export function ShopifyProductsClient({
   const [filters, setFilters] = useState<Partial<Record<FilterKey, string>>>(
     {},
   );
-  const [sort, setSort] = useState<"updated" | "title">("updated");
+  const [sort, setSort] = useState<"updated" | "created" | "title">(
+    recentOnly ? "created" : "updated",
+  );
+  const [createdWithinDays, setCreatedWithinDays] = useState(30);
   const [page, setPage] = useState(1);
   const [selectedProducts, setSelectedProducts] = useState<
     Record<string, ShopifyCatalogProduct>
@@ -333,6 +338,7 @@ export function ShopifyProductsClient({
         });
         if (query) params.set("q", query);
         if (winthorOnly) params.set("winthorStatus", "FORA_DE_LINHA");
+        if (recentOnly) params.set("createdWithinDays", String(createdWithinDays));
         Object.entries(filters).forEach(([key, value]) => {
           if (value) params.set(key, value);
         });
@@ -432,7 +438,7 @@ export function ShopifyProductsClient({
         }
       }
     },
-    [addNotification, filters, page, query, sort, winthorOnly],
+    [addNotification, createdWithinDays, filters, page, query, recentOnly, sort, winthorOnly],
   );
   useEffect(() => void load(), [load]);
   useEffect(() => setSelectedProducts({}), [filters, query, sort]);
@@ -996,11 +1002,17 @@ export function ShopifyProductsClient({
       <div className="page-head dashboard-title-row">
         <div>
           <h1 className="page-title">
-            {winthorOnly ? "Produtos fora de linha" : "Produtos"}
+            {winthorOnly
+              ? "Produtos fora de linha"
+              : recentOnly
+                ? "Adicionados recentemente"
+                : "Produtos"}
           </h1>
           <div className="page-sub">
             {winthorOnly
               ? "Produtos marcados como fora de linha na última sincronização do WinThor."
+              : recentOnly
+                ? "Produtos criados na Shopify no período selecionado. Dados da última sincronização do catálogo."
               : "Todos os produtos sincronizados do Shopify."}
           </div>
         </div>
@@ -1119,16 +1131,40 @@ export function ShopifyProductsClient({
             <span>{(data?.total || 0).toLocaleString("pt-BR")} produtos</span>
           )}
           <div className="shopify-products-table-actions">
+            {recentOnly && (
+              <label className="catalog-sort-select">
+                <span>Período</span>
+                <select
+                  value={createdWithinDays}
+                  onChange={(event) => {
+                    setCreatedWithinDays(Number(event.target.value));
+                    setPage(1);
+                  }}
+                >
+                  <option value={7}>Últimos 7 dias</option>
+                  <option value={30}>Últimos 30 dias</option>
+                  <option value={90}>Últimos 90 dias</option>
+                </select>
+              </label>
+            )}
             <label className="catalog-sort-select">
               <span>Ordenar por</span>
               <select
                 value={sort}
                 onChange={(event) => {
-                  setSort(event.target.value === "title" ? "title" : "updated");
+                  setSort(
+                    event.target.value === "title"
+                      ? "title"
+                      : recentOnly
+                        ? "created"
+                        : "updated",
+                  );
                   setPage(1);
                 }}
               >
-                <option value="updated">Mais recentes</option>
+                <option value={recentOnly ? "created" : "updated"}>
+                  {recentOnly ? "Adicionados recentemente" : "Mais recentes"}
+                </option>
                 <option value="title">A–Z</option>
               </select>
             </label>
@@ -1268,8 +1304,16 @@ export function ShopifyProductsClient({
         ) : !data?.products.length ? (
           <div className="shopify-catalog-state">
             <PackageSearch size={34} />
-            <strong>Nenhum produto encontrado</strong>
-            <span>Altere a pesquisa ou os filtros selecionados.</span>
+            <strong>
+              {recentOnly
+                ? "Nenhum produto adicionado neste período"
+                : "Nenhum produto encontrado"}
+            </strong>
+            <span>
+              {recentOnly
+                ? "Experimente um período maior ou confira a última sincronização do catálogo."
+                : "Altere a pesquisa ou os filtros selecionados."}
+            </span>
           </div>
         ) : (
           <div className="shopify-products-table">
@@ -1293,6 +1337,7 @@ export function ShopifyProductsClient({
                     />
                   </th>
                   <th>Produto</th>
+                  {recentOnly && <th>Adicionado em</th>}
                   <th>Status Shopify</th>
                   <th>Status WinThor</th>
                   <th>Estoque</th>
@@ -1364,6 +1409,20 @@ export function ShopifyProductsClient({
                         <strong>{product.title}</strong>
                       </div>
                     </td>
+                    {recentOnly && (
+                      <td>
+                        {product.shopifyCreatedAt
+                          ? new Date(product.shopifyCreatedAt).toLocaleString(
+                              "pt-BR",
+                              {
+                                timeZone: "America/Sao_Paulo",
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              },
+                            )
+                          : "—"}
+                      </td>
+                    )}
                     <td>
                       <span
                         className={`shopify-status shopify-status-${product.status.toLowerCase()}`}
@@ -1784,3 +1843,5 @@ export function ShopifyProductsClient({
     </>
   );
 }
+
+
