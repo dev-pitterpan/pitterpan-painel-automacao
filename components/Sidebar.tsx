@@ -163,6 +163,17 @@ export function Sidebar({ user }: { user: AuthUser }) {
                       Produtos processados
                     </Link>
                     <Link
+                      href="/produtos/recentes"
+                      className={
+                        pathname.startsWith("/produtos/recentes")
+                          ? "is-active"
+                          : undefined
+                      }
+                      onClick={() => setProductsOpen(false)}
+                    >
+                      Adicionados recentemente
+                    </Link>
+                    <Link
                       href="/produtos/fora-de-linha"
                       className={
                         pathname.startsWith("/produtos/fora-de-linha")
@@ -286,6 +297,20 @@ export function Sidebar({ user }: { user: AuthUser }) {
                         Produtos processados
                       </Link>
                       <Link
+                        href="/produtos/recentes"
+                        className={
+                          pathname.startsWith("/produtos/recentes")
+                            ? "is-active"
+                            : undefined
+                        }
+                        onClick={() => {
+                          setMobileOpen(false);
+                          setProductsOpen(false);
+                        }}
+                      >
+                        Adicionados recentemente
+                      </Link>
+                      <Link
                         href="/produtos/fora-de-linha"
                         className={
                           pathname.startsWith("/produtos/fora-de-linha")
@@ -326,3 +351,5 @@ export function Sidebar({ user }: { user: AuthUser }) {
     </>
   );
 }
+
+
