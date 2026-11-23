@@ -62,6 +62,7 @@ const bulkQuery = `{
         status
         tags
         descriptionHtml
+        createdAt
         updatedAt
         featuredImage { url altText }
         variants {
@@ -270,6 +271,7 @@ function emptyProduct(row) {
     totalInventory: 0,
     priceMin: 0,
     priceMax: 0,
+    shopifyCreatedAt: String(row.createdAt || ""),
     shopifyUpdatedAt: String(row.updatedAt || ""),
   };
 }
@@ -406,3 +408,5 @@ async function main() {
 }
 
 await main();
+
+

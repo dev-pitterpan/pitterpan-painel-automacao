@@ -7,6 +7,13 @@ por linha e envia os produtos ao dashboard em lotes.
 O catálogo atual continua visível durante a importação. Produtos ausentes só são
 removidos quando o novo lote termina com a quantidade esperada.
 
+A aba **Adicionados recentemente** usa a data de criação informada pela Shopify,
+armazenada no catálogo sincronizado. Após instalar uma versão que inclua essa aba,
+execute `npm run db:setup` uma vez para acrescentar a coluna ao banco e depois
+`npm run shopify:sync` para preencher as datas dos produtos existentes. A aba
+consulta apenas o banco local e permite períodos de 7, 30 ou 90 dias; a data de
+atualização de um produto não altera sua data de criação.
+
 ## 1. Criar e instalar o aplicativo
 
 No Shopify Dev Dashboard, crie um app para a organização da loja, adicione os
@@ -54,3 +61,5 @@ O computador precisa estar ligado e conectado à internet no horário escolhido.
 Cada produto vem em uma linha. Variantes e coleções vêm nas linhas seguintes e
 contêm `__parentId`, que identifica o produto pai. Por isso o arquivo é processado
 como fluxo; ele não é convertido em um único JSON grande na memória.
+
+

@@ -78,6 +78,7 @@ export type ShopifyCatalogProduct = {
   totalInventory: number;
   priceMin: number;
   priceMax: number;
+  shopifyCreatedAt: string;
   shopifyUpdatedAt: string;
   syncedAt: string;
   winthorStatus: "ATIVO" | "FORA_DE_LINHA" | "PENDENTE";
@@ -577,6 +578,7 @@ function catalogProductFromRow(row: any): ShopifyCatalogProduct {
     totalInventory: Number(row.total_inventory || 0),
     priceMin: Number(row.price_min || 0),
     priceMax: Number(row.price_max || 0),
+    shopifyCreatedAt: iso(row.shopify_created_at),
     shopifyUpdatedAt: iso(row.shopify_updated_at),
     syncedAt: iso(row.synced_at),
     winthorStatus: ["ATIVO", "FORA_DE_LINHA"].includes(row.winthor_status)
@@ -595,9 +597,10 @@ export async function listShopifyCatalogProducts(input: {
   collection?: string;
   productType?: string;
   winthorStatus?: string;
+  createdWithinDays?: number;
   page?: number;
   perPage?: number;
-  sort?: "updated" | "title" | "title_desc" | "inventory";
+  sort?: "updated" | "created" | "title" | "title_desc" | "inventory";
 }) {
   await ensureDatabase();
   const page = Math.max(1, Math.trunc(input.page || 1));
@@ -658,9 +661,17 @@ export async function listShopifyCatalogProducts(input: {
   if (winthorStatus === "FORA_DE_LINHA") where.push("w.sku IS NOT NULL");
   if (winthorStatus === "ATIVO")
     where.push("w.sku IS NULL AND EXISTS (SELECT 1 FROM winthor_sync_runs)");
+  const requestedDays = Number(input.createdWithinDays || 0);
+  if (Number.isFinite(requestedDays) && requestedDays > 0) {
+    const days = Math.max(1, Math.min(365, Math.trunc(requestedDays)));
+    params.push(days);
+    where.push(`p.shopify_created_at >= NOW() - ($${params.length}::int * INTERVAL '1 day')`);
+  }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const order =
-    input.sort === "title"
+    input.sort === "created"
+      ? "p.shopify_created_at DESC NULLS LAST, p.shopify_id DESC"
+      : input.sort === "title"
       ? "p.title ASC, p.shopify_id ASC"
       : input.sort === "title_desc"
         ? "p.title DESC, p.shopify_id ASC"
@@ -671,7 +682,9 @@ export async function listShopifyCatalogProducts(input: {
   // Preserve each page's membership when a product is edited. Within that
   // stable page, show the most recently changed product first.
   const pageOrder =
-    input.sort === "title"
+    input.sort === "created"
+      ? "ORDER BY page.shopify_created_at DESC NULLS LAST, page.shopify_id DESC"
+      : input.sort === "title"
       ? "ORDER BY page.title ASC, page.shopify_id ASC"
       : input.sort === "title_desc"
         ? "ORDER BY page.title DESC, page.shopify_id ASC"
@@ -695,7 +708,7 @@ export async function listShopifyCatalogProducts(input: {
        p.product_type, p.tags_json, p.collections_json, p.image_url,
        p.image_alt, p.weight, p.weight_unit, p.primary_sku,
        p.variants_json, p.total_inventory, p.price_min, p.price_max,
-       p.shopify_updated_at, p.synced_at,
+       p.shopify_created_at, p.shopify_updated_at, p.synced_at,
        CASE
          WHEN NOT EXISTS (SELECT 1 FROM winthor_sync_runs) THEN 'PENDENTE'
          WHEN w.sku IS NOT NULL THEN 'FORA_DE_LINHA'
@@ -1127,6 +1140,7 @@ function shopifyProductRecord(product: ShopifyCatalogSyncProduct) {
     total_inventory: product.totalInventory,
     price_min: product.priceMin,
     price_max: product.priceMax,
+    shopify_created_at: product.shopifyCreatedAt || null,
     shopify_updated_at: product.shopifyUpdatedAt || null,
   };
 }
@@ -1168,18 +1182,19 @@ export async function stageShopifyCatalogProducts(
        (batch_id, shopify_id, title, handle, status, vendor, product_type,
         tags_json, collections_json, description_html, image_url, image_alt,
         media_json, weight, weight_unit, primary_sku, variants_json,
-        total_inventory, price_min, price_max, shopify_updated_at)
+        total_inventory, price_min, price_max, shopify_created_at, shopify_updated_at)
      SELECT $1, shopify_id, title, handle, status, vendor, product_type,
        tags_json, collections_json, description_html, image_url, image_alt,
        media_json, weight, weight_unit, primary_sku, variants_json,
-       total_inventory, price_min, price_max, shopify_updated_at
+       total_inventory, price_min, price_max, shopify_created_at, shopify_updated_at
      FROM jsonb_to_recordset($2::jsonb) AS incoming(
        shopify_id TEXT, title TEXT, handle TEXT, status TEXT, vendor TEXT,
        product_type TEXT, tags_json JSONB, collections_json JSONB,
        description_html TEXT, image_url TEXT, image_alt TEXT, media_json JSONB,
        weight DOUBLE PRECISION, weight_unit TEXT, primary_sku TEXT, variants_json JSONB,
        total_inventory INTEGER, price_min DOUBLE PRECISION,
-       price_max DOUBLE PRECISION, shopify_updated_at TIMESTAMPTZ
+       price_max DOUBLE PRECISION, shopify_created_at TIMESTAMPTZ,
+       shopify_updated_at TIMESTAMPTZ
      )
      ON CONFLICT (batch_id, shopify_id) DO UPDATE SET
        title=EXCLUDED.title, handle=EXCLUDED.handle, status=EXCLUDED.status,
@@ -1192,6 +1207,7 @@ export async function stageShopifyCatalogProducts(
        primary_sku=EXCLUDED.primary_sku, variants_json=EXCLUDED.variants_json,
        total_inventory=EXCLUDED.total_inventory, price_min=EXCLUDED.price_min,
        price_max=EXCLUDED.price_max,
+       shopify_created_at=COALESCE(EXCLUDED.shopify_created_at, shopify_catalog_staging.shopify_created_at),
        shopify_updated_at=EXCLUDED.shopify_updated_at`,
     [batchId, JSON.stringify(products.map(shopifyProductRecord))],
   );
@@ -1216,18 +1232,19 @@ export async function upsertShopifyCatalogProducts(
        (shopify_id, title, handle, status, vendor, product_type, tags_json,
         collections_json, description_html, image_url, image_alt, media_json,
         weight, weight_unit, primary_sku, variants_json, total_inventory,
-        price_min, price_max, shopify_updated_at, synced_at)
+        price_min, price_max, shopify_created_at, shopify_updated_at, synced_at)
      SELECT shopify_id, title, handle, status, vendor, product_type, tags_json,
        collections_json, description_html, image_url, image_alt, media_json,
        weight, weight_unit, primary_sku, variants_json, total_inventory,
-       price_min, price_max, shopify_updated_at, NOW()
+       price_min, price_max, shopify_created_at, shopify_updated_at, NOW()
      FROM jsonb_to_recordset($1::jsonb) AS incoming(
        shopify_id TEXT, title TEXT, handle TEXT, status TEXT, vendor TEXT,
        product_type TEXT, tags_json JSONB, collections_json JSONB,
        description_html TEXT, image_url TEXT, image_alt TEXT, media_json JSONB,
        weight DOUBLE PRECISION, weight_unit TEXT, primary_sku TEXT,
        variants_json JSONB, total_inventory INTEGER, price_min DOUBLE PRECISION,
-       price_max DOUBLE PRECISION, shopify_updated_at TIMESTAMPTZ
+       price_max DOUBLE PRECISION, shopify_created_at TIMESTAMPTZ,
+       shopify_updated_at TIMESTAMPTZ
      )
      ON CONFLICT (shopify_id) DO UPDATE SET
        title=EXCLUDED.title, handle=EXCLUDED.handle, status=EXCLUDED.status,
@@ -1240,6 +1257,7 @@ export async function upsertShopifyCatalogProducts(
        primary_sku=EXCLUDED.primary_sku, variants_json=EXCLUDED.variants_json,
        total_inventory=EXCLUDED.total_inventory, price_min=EXCLUDED.price_min,
        price_max=EXCLUDED.price_max,
+       shopify_created_at=COALESCE(EXCLUDED.shopify_created_at, shopify_catalog_products.shopify_created_at),
        shopify_updated_at=EXCLUDED.shopify_updated_at, synced_at=NOW()`,
     [JSON.stringify(products.map(shopifyProductRecord))],
   );
@@ -1266,11 +1284,11 @@ export async function completeShopifyCatalogSync(
        (shopify_id, title, handle, status, vendor, product_type, tags_json,
         collections_json, description_html, image_url, image_alt, media_json,
         weight, weight_unit, primary_sku, variants_json, total_inventory,
-        price_min, price_max, shopify_updated_at, synced_at)
+        price_min, price_max, shopify_created_at, shopify_updated_at, synced_at)
      SELECT shopify_id, title, handle, status, vendor, product_type, tags_json,
        collections_json, description_html, image_url, image_alt, media_json,
        weight, weight_unit, primary_sku, variants_json, total_inventory,
-       price_min, price_max, shopify_updated_at, NOW()
+       price_min, price_max, shopify_created_at, shopify_updated_at, NOW()
      FROM shopify_catalog_staging WHERE batch_id = $1
      ON CONFLICT (shopify_id) DO UPDATE SET
        title=EXCLUDED.title, handle=EXCLUDED.handle, status=EXCLUDED.status,
@@ -1282,7 +1300,9 @@ export async function completeShopifyCatalogSync(
        weight_unit=EXCLUDED.weight_unit,
        primary_sku=EXCLUDED.primary_sku, variants_json=EXCLUDED.variants_json,
        total_inventory=EXCLUDED.total_inventory, price_min=EXCLUDED.price_min,
-       price_max=EXCLUDED.price_max, shopify_updated_at=EXCLUDED.shopify_updated_at,
+       price_max=EXCLUDED.price_max,
+       shopify_created_at=COALESCE(EXCLUDED.shopify_created_at, shopify_catalog_products.shopify_created_at),
+       shopify_updated_at=EXCLUDED.shopify_updated_at,
        synced_at=NOW()`,
     [batchId],
   );
@@ -1999,3 +2019,5 @@ export const getCurrentUser = cache(async () => {
 export async function getAuthenticatedUser() {
   return await getCurrentUser();
 }
+
+

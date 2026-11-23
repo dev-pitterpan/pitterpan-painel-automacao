@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS shopify_catalog_products (
   total_inventory INTEGER NOT NULL DEFAULT 0,
   price_min DOUBLE PRECISION NOT NULL DEFAULT 0,
   price_max DOUBLE PRECISION NOT NULL DEFAULT 0,
+  shopify_created_at TIMESTAMPTZ,
   shopify_updated_at TIMESTAMPTZ,
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -126,6 +127,7 @@ CREATE TABLE IF NOT EXISTS shopify_catalog_staging (
   total_inventory INTEGER NOT NULL DEFAULT 0,
   price_min DOUBLE PRECISION NOT NULL DEFAULT 0,
   price_max DOUBLE PRECISION NOT NULL DEFAULT 0,
+  shopify_created_at TIMESTAMPTZ,
   shopify_updated_at TIMESTAMPTZ,
   PRIMARY KEY (batch_id, shopify_id)
 );
@@ -167,9 +169,14 @@ CREATE TABLE IF NOT EXISTS image_sync_jobs (
 CREATE INDEX IF NOT EXISTS idx_image_sync_jobs_pending ON image_sync_jobs(status, lease_until, id);
 CREATE INDEX IF NOT EXISTS idx_shopify_catalog_title ON shopify_catalog_products(title);
 CREATE INDEX IF NOT EXISTS idx_shopify_catalog_sku ON shopify_catalog_products(primary_sku);
+ALTER TABLE shopify_catalog_products ADD COLUMN IF NOT EXISTS shopify_created_at TIMESTAMPTZ;
+ALTER TABLE shopify_catalog_staging ADD COLUMN IF NOT EXISTS shopify_created_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_shopify_catalog_created ON shopify_catalog_products(shopify_created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_shopify_catalog_updated ON shopify_catalog_products(shopify_updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_shopify_staging_batch ON shopify_catalog_staging(batch_id);
 CREATE INDEX IF NOT EXISTS idx_winthor_status_synced ON winthor_product_statuses(synced_at DESC);
 CREATE INDEX IF NOT EXISTS idx_winthor_status_sku ON winthor_product_statuses(sku);
 CREATE INDEX IF NOT EXISTS idx_reprocess_jobs_sku_created ON reprocess_jobs ((LOWER(TRIM(sku))), created_at DESC);
+
+
 
