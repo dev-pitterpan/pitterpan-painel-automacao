@@ -23,6 +23,7 @@ type ShopifyProductNode = {
   status: string;
   tags: string[];
   descriptionHtml: string;
+  createdAt: string;
   updatedAt: string;
   featuredImage?: { url: string; altText?: string | null } | null;
   variants: { nodes: ShopifyVariantNode[] };
@@ -68,7 +69,7 @@ export type ShopifyPublicationChange = {
 };
 
 const PRODUCT_FIELDS = `
-  id title handle vendor productType status tags descriptionHtml updatedAt
+  id title handle vendor productType status tags descriptionHtml createdAt updatedAt
   featuredImage { url altText }
   variants(first: 250) {
     nodes {
@@ -516,6 +517,7 @@ export function shopifyProductToCatalog(
     ),
     priceMin: prices.length ? Math.min(...prices) : 0,
     priceMax: prices.length ? Math.max(...prices) : 0,
+    shopifyCreatedAt: product.createdAt || "",
     shopifyUpdatedAt: product.updatedAt || new Date().toISOString(),
   };
 }
@@ -1046,3 +1048,5 @@ export async function unpublishShopifyProduct(productId: string) {
       ),
     );
 }
+
+
