@@ -851,7 +851,7 @@
   width: min(1040px, calc(100vw - 48px)); height: auto;
   max-height: min(1006px, calc(100dvh - 80px)); border: 1px solid #fff; border-radius: 28px;
   background: #fff; box-shadow: 0 19px 45px rgba(41,87,157,.27);
-  color: #0c1c49; font-family: Arial, Helvetica, sans-serif;
+  color: #0c1c49; font-family: inherit;
 }
 .automation-discontinued-hero {
   position: relative; flex: 0 0 160px; overflow: hidden;
