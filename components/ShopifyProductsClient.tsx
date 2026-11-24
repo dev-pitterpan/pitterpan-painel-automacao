@@ -66,6 +66,14 @@ type CatalogEnrichmentResponse = {
 type FilterKey = "vendor" | "tag" | "status" | "productType" | "collection";
 type BulkAction = "archive" | "unarchive" | "unpublish" | "delete";
 type ChannelBulkAction = "publish" | "unpublish";
+type DiscontinuedDeleteResult = {
+  shopifyId: string;
+  title: string;
+  eligible: boolean;
+  deleted: boolean;
+  reason?: string;
+  error?: string;
+};
 type SalesChannel = { id: string; name: string };
 const filterLabels: Record<FilterKey, string> = {
   vendor: "Fabricante",
@@ -275,6 +283,13 @@ export function ShopifyProductsClient({
   const [weightRunning, setWeightRunning] = useState(false);
   const [weightProgress, setWeightProgress] = useState(0);
   const [weightError, setWeightError] = useState("");
+  const [discontinuedModalOpen, setDiscontinuedModalOpen] = useState(false);
+  const [discontinuedChecking, setDiscontinuedChecking] = useState(false);
+  const [discontinuedRunning, setDiscontinuedRunning] = useState(false);
+  const [discontinuedProgress, setDiscontinuedProgress] = useState(0);
+  const [discontinuedResults, setDiscontinuedResults] = useState<DiscontinuedDeleteResult[]>([]);
+  const [discontinuedError, setDiscontinuedError] = useState("");
+  const [discontinuedSelection, setDiscontinuedSelection] = useState<ShopifyCatalogProduct[]>([]);
   const [bulkActionRunning, setBulkActionRunning] = useState<BulkAction | null>(
     null,
   );
@@ -845,6 +860,98 @@ export function ShopifyProductsClient({
       }
     } finally {
       setWeightRunning(false);
+    }
+  };
+
+  const inspectDiscontinuedSelection = async (
+    products: ShopifyCatalogProduct[],
+    mode: "preview" | "execute",
+  ) => {
+    const results: DiscontinuedDeleteResult[] = [];
+    for (let index = 0; index < products.length; index += 5) {
+      const batch = products.slice(index, index + 5);
+      const response = await fetch("/api/shopify/discontinued-delete", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          products: batch.map(({ shopifyId, title }) => ({ shopifyId, title })),
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.ok || !Array.isArray(body.results) || body.results.length !== batch.length)
+        throw new Error(body?.error || "Não foi possível confirmar a situação dos produtos.");
+      results.push(...body.results);
+      setDiscontinuedProgress(Math.min(index + batch.length, products.length));
+    }
+    return results;
+  };
+
+  const openDiscontinuedAutomation = async () => {
+    if (!selectedProductsList.length || automationRunning || weightRunning || bulkActionRunning) return;
+    const products = [...selectedProductsList];
+    setAutomationPickerOpen(false);
+    setDiscontinuedSelection(products);
+    setDiscontinuedResults([]);
+    setDiscontinuedError("");
+    setDiscontinuedProgress(0);
+    setDiscontinuedModalOpen(true);
+    setDiscontinuedChecking(true);
+    try {
+      setDiscontinuedResults(await inspectDiscontinuedSelection(products, "preview"));
+    } catch (cause) {
+      setDiscontinuedError(cause instanceof Error ? cause.message : "Falha na conferência.");
+    } finally {
+      setDiscontinuedChecking(false);
+    }
+  };
+
+  const runDiscontinuedAutomation = async () => {
+    if (discontinuedRunning || discontinuedChecking || discontinuedError || !discontinuedResults.length) return;
+    const eligibleIds = new Set(discontinuedResults.filter((result) => result.eligible && !result.deleted).map((result) => result.shopifyId));
+    const products = discontinuedSelection.filter((product) => eligibleIds.has(product.shopifyId));
+    if (!products.length) return;
+    setDiscontinuedRunning(true);
+    setDiscontinuedProgress(0);
+    setDiscontinuedError("");
+    try {
+      const results: DiscontinuedDeleteResult[] = [];
+      for (let index = 0; index < products.length; index += 5) {
+        const batch = products.slice(index, index + 5);
+        try {
+          results.push(...await inspectDiscontinuedSelection(batch, "execute"));
+        } catch (cause) {
+          const error = cause instanceof Error ? cause.message : "Falha na comunicação.";
+          results.push(...batch.map(({ shopifyId, title }) => ({
+            shopifyId,
+            title,
+            eligible: false,
+            deleted: false,
+            error: `${error} Confira na Shopify antes de tentar novamente.`,
+          })));
+        }
+        setDiscontinuedProgress(Math.min(index + batch.length, products.length));
+      }
+      const deletedIds = new Set(results.filter((result) => result.deleted).map((result) => result.shopifyId));
+      setDiscontinuedResults((current) => current.map((item) => results.find((result) => result.shopifyId === item.shopifyId) || item));
+      if (deletedIds.size) {
+        setSelectedProducts((current) => {
+          const next = { ...current };
+          for (const id of deletedIds) delete next[id];
+          return next;
+        });
+      }
+      await load(true);
+      const skipped = results.filter((result) => !result.deleted);
+      const message = `${deletedIds.size} ${deletedIds.size === 1 ? "produto excluído" : "produtos excluídos"} da Shopify. ${skipped.length} ${skipped.length === 1 ? "produto mantido" : "produtos mantidos"} após nova conferência.`;
+      setAutomationMessage({ tone: skipped.some((item) => item.error) ? "error" : "success", text: message });
+      addNotification(skipped.some((item) => item.error) ? "error" : "success", message);
+    } catch (cause) {
+      setDiscontinuedError(cause instanceof Error ? cause.message : "Falha na exclusão.");
+      await load(true);
+    } finally {
+      setDiscontinuedRunning(false);
     }
   };
 
@@ -1562,6 +1669,18 @@ export function ShopifyProductsClient({
                 </span>
                 <ChevronRight size={18} />
               </button>
+              <button
+                type="button"
+                disabled={!data?.permissions?.canEditProducts}
+                onClick={() => void openDiscontinuedAutomation()}
+              >
+                <Trash2 size={22} />
+                <span>
+                  <strong>Excluir fora de linha sem estoque</strong>
+                  <small>Conferir WinThor e Shopify antes de excluir cada produto.</small>
+                </span>
+                <ChevronRight size={18} />
+              </button>
             </div>
             <footer>
               <button
@@ -1717,6 +1836,69 @@ export function ShopifyProductsClient({
           </form>
         </div>
       )}
+      {discontinuedModalOpen && (
+        <div
+          className="sales-channel-bulk-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="discontinued-delete-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !discontinuedRunning && !discontinuedChecking)
+              setDiscontinuedModalOpen(false);
+          }}
+        >
+          <section className="sales-channel-bulk-modal automation-discontinued-modal">
+            <header>
+              <h2 id="discontinued-delete-title">Excluir fora de linha sem estoque</h2>
+              <button
+                type="button"
+                disabled={discontinuedRunning || discontinuedChecking}
+                onClick={() => setDiscontinuedModalOpen(false)}
+                aria-label="Fechar"
+              >
+                <X size={19} />
+              </button>
+            </header>
+            <div className="automation-discontinued-body">
+              <p>Somente produtos fora de linha no WinThor <strong>e</strong> com estoque exatamente zero na Shopify podem ser excluídos.</p>
+              {(discontinuedChecking || discontinuedRunning) && (
+                <p className="automation-weight-progress" role="status">
+                  <LoaderCircle className="spin" size={16} />
+                  {discontinuedChecking ? "Conferindo" : "Revalidando e excluindo"} {discontinuedProgress} de {discontinuedRunning ? discontinuedResults.filter((item) => item.eligible).length : discontinuedSelection.length} produtos...
+                </p>
+              )}
+              {discontinuedError && <p className="sales-channel-bulk-error" role="alert">{discontinuedError}</p>}
+              {!discontinuedChecking && discontinuedResults.length > 0 && (
+                <>
+                  <p className="automation-discontinued-summary">
+                    {discontinuedResults.filter((item) => item.eligible && !item.deleted).length} aptos para exclusão; {discontinuedResults.filter((item) => item.deleted).length} excluídos; {discontinuedResults.filter((item) => !item.eligible).length} mantidos.
+                  </p>
+                  <ul className="automation-discontinued-results">
+                    {discontinuedResults.map((item) => (
+                      <li key={item.shopifyId}>
+                        <strong>{item.title || item.shopifyId}</strong>
+                        <span>{item.error || item.reason || (item.deleted ? "Excluído." : "Aguardando confirmação.")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+            <footer>
+              <button className="btn" type="button" disabled={discontinuedChecking || discontinuedRunning} onClick={() => setDiscontinuedModalOpen(false)}>Fechar</button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={discontinuedChecking || discontinuedRunning || Boolean(discontinuedError) || !discontinuedResults.some((item) => item.eligible && !item.deleted)}
+                onClick={() => void runDiscontinuedAutomation()}
+              >
+                {discontinuedRunning && <LoaderCircle className="spin" size={15} />}
+                {discontinuedRunning ? "Excluindo..." : "Confirmar exclusão dos aptos"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
       {channelBulkAction && (
         <div
           className="sales-channel-bulk-backdrop"
@@ -1843,5 +2025,3 @@ export function ShopifyProductsClient({
     </>
   );
 }
-
-
