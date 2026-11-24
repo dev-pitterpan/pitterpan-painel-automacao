@@ -848,8 +848,8 @@
 .automation-discontinued-backdrop { background: rgba(224,236,255,.78); backdrop-filter: blur(9px); }
 .automation-discontinued-modal {
   position: relative; display: flex; flex-direction: column;
-  width: min(1140px, calc(100vw - 48px)); height: min(1006px, calc(100dvh - 80px));
-  max-height: calc(100dvh - 40px); border: 1px solid #fff; border-radius: 28px;
+  width: min(1040px, calc(100vw - 48px)); height: auto;
+  max-height: min(1006px, calc(100dvh - 80px)); border: 1px solid #fff; border-radius: 28px;
   background: #fff; box-shadow: 0 19px 45px rgba(41,87,157,.27);
   color: #0c1c49; font-family: Arial, Helvetica, sans-serif;
 }
@@ -892,12 +892,12 @@
   padding: 8px 38px 0; border: 0; text-align: center;
 }
 .automation-discontinued-modal > .automation-discontinued-heading h2 {
-  margin: 0; color: #0c1d4e; font-size: clamp(27px,3.1vw,44px);
+  margin: 0; color: #0c1d4e; font-size: clamp(27px,4vw,44px);
   font-weight: 750; letter-spacing: -.03em; line-height: 1.2;
 }
 .automation-discontinued-heading p {
   max-width: 960px; margin: 5px auto 0; color: #4a6395;
-  font-size: clamp(15px,1.65vw,23px); line-height: 1.42;
+  font-size: clamp(15px,2vw,23px); line-height: 1.42;
 }
 .automation-discontinued-modal > .automation-discontinued-heading .automation-discontinued-close {
   position: absolute; z-index: 3; top: -139px; right: 29px;
@@ -913,8 +913,8 @@
   gap: 25px; flex: 0 0 auto;
 }
 .automation-discontinued-metric {
-  display: flex; align-items: center; gap: 28px; min-height: 115px;
-  padding: 18px 31px; border: 1px solid; border-radius: 15px;
+  display: flex; align-items: center; gap: 18px; min-height: 115px;
+  padding: 16px 18px; border: 1px solid; border-radius: 15px;
 }
 .automation-discontinued-metric.is-eligible { border-color: #b8d4ff; background: #f1f6ff; }
 .automation-discontinued-metric.is-deleted { border-color: #b7e9ce; background: #f1fbf6; }
@@ -928,7 +928,7 @@
 .is-kept .automation-discontinued-metric-icon { color: #ee9200; background: #ffebc8; }
 .automation-discontinued-metric > span:last-child { display: grid; gap: 0; min-width: 0; }
 .automation-discontinued-metric strong { font-size: 44px; line-height: 1; letter-spacing: -.03em; }
-.automation-discontinued-metric small { margin-top: 4px; font-size: 21px; white-space: nowrap; }
+.automation-discontinued-metric small { margin-top: 4px; font-size: 19px; white-space: nowrap; }
 .automation-discontinued-metric.is-eligible small { color: #0063ec; }
 .automation-discontinued-metric.is-deleted small { color: #008844; }
 .automation-discontinued-metric.is-kept small { color: #ec8500; }
