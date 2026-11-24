@@ -1090,7 +1090,7 @@
 .automation-discontinued-step-icon svg { width: 18px; height: 18px; }
 .automation-discontinued-step strong { margin-top: 5px; font-size: 11px; }
 .automation-discontinued-step small { margin-top: 3px; font-size: 10px; }
-.automation-discontinued-results { gap: 7px; max-height: 195px; }
+.automation-discontinued-results { gap: 7px; max-height: 195px; margin-top: 14px; }
 .automation-discontinued-results li { gap: 9px; min-height: 54px; padding: 7px 9px; border-radius: 9px; }
 .automation-discontinued-product-icon { width: 34px; height: 34px; flex-basis: 34px; border-radius: 9px; }
 .automation-discontinued-product-icon svg { width: 19px; height: 19px; }
