@@ -14,7 +14,9 @@ import {
   Layers3,
   LoaderCircle,
   MoreHorizontal,
+  Package,
   PackageSearch,
+  Pause,
   Plus,
   RefreshCcw,
   Search,
@@ -1103,6 +1105,9 @@ export function ShopifyProductsClient({
     visibleSalesChannels.every((channel) =>
       selectedChannelIds.includes(channel.id),
     );
+  const discontinuedEligibleCount = discontinuedResults.filter((item) => item.eligible && !item.deleted).length;
+  const discontinuedDeletedCount = discontinuedResults.filter((item) => item.deleted).length;
+  const discontinuedKeptCount = discontinuedResults.filter((item) => !item.eligible).length;
 
   return (
     <>
@@ -1838,7 +1843,7 @@ export function ShopifyProductsClient({
       )}
       {discontinuedModalOpen && (
         <div
-          className="sales-channel-bulk-backdrop"
+          className="sales-channel-bulk-backdrop automation-discontinued-backdrop"
           role="dialog"
           aria-modal="true"
           aria-labelledby="discontinued-delete-title"
@@ -1848,19 +1853,58 @@ export function ShopifyProductsClient({
           }}
         >
           <section className="sales-channel-bulk-modal automation-discontinued-modal">
-            <header>
-              <h2 id="discontinued-delete-title">Excluir fora de linha sem estoque</h2>
+            <div className="automation-discontinued-hero" aria-hidden="true">
+              <span className="automation-discontinued-spark spark-one" />
+              <span className="automation-discontinued-spark spark-two" />
+              <span className="automation-discontinued-spark spark-three" />
+              <span className="automation-discontinued-spark spark-four" />
+              <span className="automation-discontinued-icon"><Package size={66} strokeWidth={1.7} /><Trash2 size={32} strokeWidth={2.2} /></span>
+            </div>
+            <header className="automation-discontinued-heading">
+              <h2 id="discontinued-delete-title">Exclusão de produtos fora de linha</h2>
+              <p>Somente produtos fora de linha no WinThor e com estoque exatamente zero na Shopify podem ser excluídos.</p>
               <button
+                className="automation-discontinued-close"
                 type="button"
                 disabled={discontinuedRunning || discontinuedChecking}
                 onClick={() => setDiscontinuedModalOpen(false)}
                 aria-label="Fechar"
               >
-                <X size={19} />
+                <X size={28} />
               </button>
             </header>
             <div className="automation-discontinued-body">
-              <p>Somente produtos fora de linha no WinThor <strong>e</strong> com estoque exatamente zero na Shopify podem ser excluídos.</p>
+              <div className="automation-discontinued-metrics" aria-live="polite">
+                <div className="automation-discontinued-metric is-eligible">
+                  <span className="automation-discontinued-metric-icon"><Package size={38} strokeWidth={1.9} /></span>
+                  <span><strong>{discontinuedEligibleCount}</strong><small>aptos para exclusão</small></span>
+                </div>
+                <div className="automation-discontinued-metric is-deleted">
+                  <span className="automation-discontinued-metric-icon"><Check size={38} strokeWidth={2.6} /></span>
+                  <span><strong>{discontinuedDeletedCount}</strong><small>excluídos</small></span>
+                </div>
+                <div className="automation-discontinued-metric is-kept">
+                  <span className="automation-discontinued-metric-icon"><Pause size={35} strokeWidth={2.8} /></span>
+                  <span><strong>{discontinuedKeptCount}</strong><small>mantidos</small></span>
+                </div>
+              </div>
+              <div className="automation-discontinued-steps" aria-label="Etapas da conferência">
+                <div className="automation-discontinued-step is-complete">
+                  <span className="automation-discontinued-step-icon"><Check size={27} /></span>
+                  <strong>Análise de estoque</strong>
+                  <small>{discontinuedChecking ? "Em andamento" : "Concluído"}</small>
+                </div>
+                <div className={`automation-discontinued-step ${discontinuedChecking ? "" : "is-complete"}`}>
+                  <span className="automation-discontinued-step-icon">{discontinuedChecking ? <MoreHorizontal size={27} /> : <Check size={27} />}</span>
+                  <strong>Validação Shopify</strong>
+                  <small>{discontinuedChecking ? "Aguardando" : "Concluído"}</small>
+                </div>
+                <div className={`automation-discontinued-step ${discontinuedEligibleCount ? "has-items" : ""}`}>
+                  <span className="automation-discontinued-step-icon">{discontinuedEligibleCount ? <Check size={27} /> : <MoreHorizontal size={27} />}</span>
+                  <strong>Produtos aptos</strong>
+                  <small>{discontinuedChecking ? "Aguardando" : discontinuedEligibleCount ? `${discontinuedEligibleCount} ${discontinuedEligibleCount === 1 ? "item" : "itens"}` : "Nenhum item"}</small>
+                </div>
+              </div>
               {(discontinuedChecking || discontinuedRunning) && (
                 <p className="automation-weight-progress" role="status">
                   <LoaderCircle className="spin" size={16} />
@@ -1869,19 +1913,21 @@ export function ShopifyProductsClient({
               )}
               {discontinuedError && <p className="sales-channel-bulk-error" role="alert">{discontinuedError}</p>}
               {!discontinuedChecking && discontinuedResults.length > 0 && (
-                <>
-                  <p className="automation-discontinued-summary">
-                    {discontinuedResults.filter((item) => item.eligible && !item.deleted).length} aptos para exclusão; {discontinuedResults.filter((item) => item.deleted).length} excluídos; {discontinuedResults.filter((item) => !item.eligible).length} mantidos.
-                  </p>
                   <ul className="automation-discontinued-results">
                     {discontinuedResults.map((item) => (
                       <li key={item.shopifyId}>
-                        <strong>{item.title || item.shopifyId}</strong>
-                        <span>{item.error || item.reason || (item.deleted ? "Excluído." : "Aguardando confirmação.")}</span>
+                        <span className="automation-discontinued-product-icon"><Package size={27} strokeWidth={1.8} /></span>
+                        <span className="automation-discontinued-product-text">
+                          <strong>{item.title || item.shopifyId}</strong>
+                          <small>{item.error || item.reason || (item.deleted ? "Excluído." : "Aguardando confirmação.")}</small>
+                        </span>
+                        <span className={`automation-discontinued-product-status ${item.error ? "is-error" : item.deleted ? "is-deleted" : item.eligible ? "is-eligible" : "is-kept"}`}>
+                          {item.error ? <X size={21} /> : item.eligible && !item.deleted ? <Package size={21} /> : <Check size={21} />}
+                          {item.error ? "Erro" : item.deleted ? "Excluído" : item.eligible ? "Apto" : "Mantido"}
+                        </span>
                       </li>
                     ))}
                   </ul>
-                </>
               )}
             </div>
             <footer>
