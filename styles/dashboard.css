@@ -1053,8 +1053,9 @@
 }
 /* Mesmo formato compacto dos demais modais de automação. */
 .sales-channel-bulk-modal.automation-discontinued-modal {
-  width: min(546px, calc(100vw - 24px));
+  width: min(601px, calc(100vw - 24px));
   height: auto;
+  min-height: 418px;
   max-height: min(680px, calc(100dvh - 32px));
   border-radius: 18px;
 }
@@ -1104,7 +1105,8 @@
 .automation-discontinued-modal > footer .btn-primary { width: auto; min-width: 0; flex: 1; }
 @media (max-width: 560px) {
   .sales-channel-bulk-modal.automation-discontinued-modal {
-    width: min(546px, calc(100vw - 24px)); height: auto;
+    width: min(601px, calc(100vw - 24px)); height: auto;
+    min-height: 0;
     max-height: min(680px, calc(100dvh - 24px));
   }
   .automation-discontinued-modal > .automation-discontinued-heading h2 { font-size: 20px; }
