@@ -1121,6 +1121,39 @@ export async function getWinthorProductStatus(sku: string) {
   };
 }
 
+export async function getShopifyDeletionStatus(shopifyId: string) {
+  await ensureDatabase();
+  const rows = await query<{
+    sku: string;
+    has_sync: boolean;
+    discontinued: boolean;
+  }>(
+    `SELECT p.primary_sku AS sku,
+       EXISTS (SELECT 1 FROM winthor_sync_runs) AS has_sync,
+       EXISTS (
+         SELECT 1 FROM winthor_product_statuses w
+         WHERE w.sku = p.primary_sku
+           AND w.batch_id = (
+             SELECT batch_id FROM winthor_sync_runs ORDER BY created_at DESC LIMIT 1
+           )
+       ) AS discontinued
+     FROM shopify_catalog_products p
+     WHERE p.shopify_id = $1
+     LIMIT 1`,
+    [shopifyId],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    sku: String(row.sku || "").trim(),
+    status: !row.has_sync
+      ? ("PENDENTE" as const)
+      : row.discontinued
+        ? ("FORA_DE_LINHA" as const)
+        : ("ATIVO" as const),
+  };
+}
+
 export async function getShopifyCatalogFacets() {
   await ensureDatabase();
   const [facets] = await query<{

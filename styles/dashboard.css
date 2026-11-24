@@ -808,6 +808,42 @@
 .automation-weight-modal {
   width: min(520px, calc(100vw - 24px));
 }
+.automation-discontinued-modal {
+  width: min(680px, calc(100vw - 24px));
+}
+.automation-discontinued-body {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px;
+  font-size: 13px;
+}
+.automation-discontinued-body p {
+  margin: 0;
+}
+.automation-discontinued-summary {
+  font-weight: 700;
+}
+.automation-discontinued-results {
+  display: grid;
+  gap: 7px;
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.automation-discontinued-results li {
+  display: grid;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid #dce4f0;
+  border-radius: 8px;
+}
+.automation-discontinued-results span {
+  color: #52627d;
+}
 .automation-choice-intro,
 .automation-weight-body > p:first-child {
   margin: 0;
