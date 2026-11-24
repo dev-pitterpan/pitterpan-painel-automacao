@@ -1051,6 +1051,80 @@
   .automation-discontinued-modal > footer .btn { min-height: 44px; padding: 0 10px; border-radius: 9px; font-size: 12px; }
   .automation-discontinued-modal > footer .btn-primary { width: auto; min-width: 0; flex: 2; }
 }
+/* Mesmo formato compacto dos demais modais de automação. */
+.sales-channel-bulk-modal.automation-discontinued-modal {
+  width: min(520px, calc(100vw - 24px));
+  height: auto;
+  max-height: min(680px, calc(100dvh - 32px));
+  border-radius: 18px;
+}
+.automation-discontinued-hero { flex-basis: 76px; }
+.automation-discontinued-hero::before { top: 43px; height: 100px; }
+.automation-discontinued-hero::after { top: 72px; height: 90px; }
+.automation-discontinued-icon { top: 9px; width: 60px; height: 60px; border-radius: 16px; }
+.automation-discontinued-icon svg:first-child { width: 35px; height: 35px; }
+.automation-discontinued-icon svg:last-child { right: 7px; bottom: 8px; width: 19px; height: 19px; }
+.automation-discontinued-spark { display: none; }
+.automation-discontinued-modal > .automation-discontinued-heading {
+  flex: 0 0 auto; padding: 7px 20px 17px;
+}
+.automation-discontinued-modal > .automation-discontinued-heading h2 { font-size: 23px; }
+.automation-discontinued-heading p { margin-top: 5px; font-size: 13px; line-height: 1.35; }
+.automation-discontinued-modal > .automation-discontinued-heading .automation-discontinued-close {
+  top: -62px; right: 15px; width: 34px; height: 34px;
+}
+.automation-discontinued-modal > .automation-discontinued-heading .automation-discontinued-close svg { width: 18px; }
+.automation-discontinued-body { padding: 0 18px; }
+.automation-discontinued-metrics { gap: 8px; }
+.automation-discontinued-metric {
+  display: flex; gap: 7px; min-height: 66px; padding: 8px;
+  border-radius: 10px; text-align: left;
+}
+.automation-discontinued-metric-icon { width: 32px; height: 32px; flex-basis: 32px; }
+.automation-discontinued-metric-icon svg { width: 19px; height: 19px; }
+.automation-discontinued-metric strong { font-size: 23px; }
+.automation-discontinued-metric small { margin-top: 2px; font-size: 10px; line-height: 1.15; white-space: normal; }
+.automation-discontinued-steps { margin: 15px 0 14px; }
+.automation-discontinued-steps::before { top: 15px; height: 3px; }
+.automation-discontinued-step-icon { width: 32px; height: 32px; }
+.automation-discontinued-step-icon svg { width: 18px; height: 18px; }
+.automation-discontinued-step strong { margin-top: 5px; font-size: 11px; }
+.automation-discontinued-step small { margin-top: 3px; font-size: 10px; }
+.automation-discontinued-results { gap: 7px; max-height: 195px; }
+.automation-discontinued-results li { gap: 9px; min-height: 54px; padding: 7px 9px; border-radius: 9px; }
+.automation-discontinued-product-icon { width: 34px; height: 34px; flex-basis: 34px; border-radius: 9px; }
+.automation-discontinued-product-icon svg { width: 19px; height: 19px; }
+.automation-discontinued-product-text { gap: 2px; }
+.automation-discontinued-product-text strong { font-size: 12px; white-space: normal; }
+.automation-discontinued-product-text small { font-size: 10px; }
+.automation-discontinued-product-status { min-width: 0; gap: 3px; padding: 5px 7px; font-size: 10px; }
+.automation-discontinued-product-status svg { width: 13px; height: 13px; }
+.automation-discontinued-modal > footer { flex-basis: 66px; gap: 8px; margin: 11px 18px 0; }
+.automation-discontinued-modal > footer .btn { min-height: 38px; padding: 0 12px; border-radius: 8px; font-size: 12px; }
+.automation-discontinued-modal > footer .btn-primary { width: auto; min-width: 0; flex: 1; }
+@media (max-width: 560px) {
+  .sales-channel-bulk-modal.automation-discontinued-modal {
+    width: min(520px, calc(100vw - 24px)); height: auto;
+    max-height: min(680px, calc(100dvh - 24px));
+  }
+  .automation-discontinued-modal > .automation-discontinued-heading h2 { font-size: 20px; }
+  .automation-discontinued-metric { display: flex; justify-items: initial; min-height: 64px; padding: 7px 5px; text-align: left; }
+  .automation-discontinued-metric-icon { width: 27px; height: 27px; flex-basis: 27px; }
+  .automation-discontinued-metric-icon svg { width: 17px; height: 17px; }
+  .automation-discontinued-metric strong { font-size: 20px; }
+  .automation-discontinued-metric small { font-size: 9px; }
+  .automation-discontinued-steps { margin: 15px 0 14px; }
+  .automation-discontinued-steps::before { top: 15px; }
+  .automation-discontinued-step-icon { width: 32px; height: 32px; }
+  .automation-discontinued-step strong { font-size: 10px; }
+  .automation-discontinued-step small { font-size: 9px; }
+  .automation-discontinued-results li { min-height: 54px; padding: 7px; }
+  .automation-discontinued-product-icon { width: 32px; height: 32px; flex-basis: 32px; }
+  .automation-discontinued-product-text strong { font-size: 11px; }
+  .automation-discontinued-product-text small { font-size: 10px; }
+  .automation-discontinued-modal > footer { flex-basis: 66px; margin: 11px 18px 0; }
+  .automation-discontinued-modal > footer .btn { min-height: 38px; font-size: 11px; }
+}
 .automation-choice-intro,
 .automation-weight-body > p:first-child {
   margin: 0;
