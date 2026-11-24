@@ -269,6 +269,18 @@ export async function getShopifyProductStatus(productId: string) {
   return data.product.status;
 }
 
+export async function getShopifyProductInventory(productId: string) {
+  const data = await shopifyGraphql<{
+    product: { id: string; totalInventory: number | null } | null;
+  }>(
+    `query DashboardProductInventory($id: ID!) {
+      product(id: $id) { id totalInventory }
+    }`,
+    { id: productId },
+  );
+  return data.product;
+}
+
 export async function findMissingShopifyProductIds(productIds: string[]) {
   const ids = [...new Set(productIds.filter(Boolean))];
   const missing: string[] = [];
@@ -1048,5 +1060,3 @@ export async function unpublishShopifyProduct(productId: string) {
       ),
     );
 }
-
-
