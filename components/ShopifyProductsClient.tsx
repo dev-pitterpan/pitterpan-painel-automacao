@@ -1888,23 +1888,6 @@ export function ShopifyProductsClient({
                   <span><strong>{discontinuedKeptCount}</strong><small>mantidos</small></span>
                 </div>
               </div>
-              <div className="automation-discontinued-steps" aria-label="Etapas da conferência">
-                <div className="automation-discontinued-step is-complete">
-                  <span className="automation-discontinued-step-icon"><Check size={27} /></span>
-                  <strong>Análise de estoque</strong>
-                  <small>{discontinuedChecking ? "Em andamento" : "Concluído"}</small>
-                </div>
-                <div className={`automation-discontinued-step ${discontinuedChecking ? "" : "is-complete"}`}>
-                  <span className="automation-discontinued-step-icon">{discontinuedChecking ? <MoreHorizontal size={27} /> : <Check size={27} />}</span>
-                  <strong>Validação Shopify</strong>
-                  <small>{discontinuedChecking ? "Aguardando" : "Concluído"}</small>
-                </div>
-                <div className={`automation-discontinued-step ${discontinuedEligibleCount ? "has-items" : ""}`}>
-                  <span className="automation-discontinued-step-icon">{discontinuedEligibleCount ? <Check size={27} /> : <MoreHorizontal size={27} />}</span>
-                  <strong>Produtos aptos</strong>
-                  <small>{discontinuedChecking ? "Aguardando" : discontinuedEligibleCount ? `${discontinuedEligibleCount} ${discontinuedEligibleCount === 1 ? "item" : "itens"}` : "Nenhum item"}</small>
-                </div>
-              </div>
               {(discontinuedChecking || discontinuedRunning) && (
                 <p className="automation-weight-progress" role="status">
                   <LoaderCircle className="spin" size={16} />
