@@ -2161,3 +2161,10 @@ export async function listAutomatedDeletionHistory(page: number, search: string)
       ORDER BY created_at DESC LIMIT 50 OFFSET $2`, [term,(safePage-1)*50]);
   return { rows, total: Number(count?.total||0), page: safePage, perPage: 50 };
 }
+
+export async function getLatestWinthorSyncAt() {
+  const [row] = await query<{ created_at: string }>(
+    "SELECT created_at FROM winthor_sync_runs ORDER BY created_at DESC LIMIT 1",
+  );
+  return row?.created_at || null;
+}
