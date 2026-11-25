@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { AlertCircle, ArchiveX, ArrowLeft, CheckCircle2, Clock3, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, ArchiveX, CheckCircle2, Clock3, RefreshCw, Search } from "lucide-react";
 import styles from "./history.module.css";
 
 type Entry = {
@@ -74,9 +73,6 @@ export default function AutomatedDeletionHistory() {
             Produtos excluídos após validação do WinThor e conferência do estoque na Shopify.
           </p>
         </div>
-        <Link href="/excluidos" className={styles.backLink}>
-          <ArrowLeft size={16} aria-hidden="true" /> Planilha de excluídos
-        </Link>
       </header>
 
       <section className={styles.panel} aria-label="Registros de exclusão">
