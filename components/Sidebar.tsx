@@ -27,7 +27,6 @@ const items: Array<[string, string, LucideIcon]> = [
   ["Dashboard", "/", LayoutDashboard],
   ["Produtos", "/produtos", Package],
   ["Excluídos", "/excluidos", ArchiveX],
-  ["Histórico de exclusões", "/excluidos/historico", History],
   ["Erros", "/erros", CircleAlert],
   ["Relatórios", "/relatorios", FileText],
 ];
@@ -43,6 +42,7 @@ export function Sidebar({ user }: { user: AuthUser }) {
     user.role === "admin"
       ? [
           ...items,
+          ["Histórico de exclusões", "/excluidos/historico", History] as [string, string, LucideIcon],
           ["Reprocessados", "/reprocessados", RotateCcw] as [
             string,
             string,
