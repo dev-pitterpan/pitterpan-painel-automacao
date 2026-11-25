@@ -2,6 +2,9 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   deleteShopifyCatalogProducts,
+  beginAutomatedDeletion,
+  finishAutomatedDeletion,
+  getAutomatedDeletionSnapshot,
   getCurrentUser,
   getWinthorProductStatus,
   listShopifyCatalogProducts,
@@ -9,7 +12,7 @@ import {
   syncWinthorProductStatuses,
   type WinthorStatusProduct,
 } from "@/lib/auth";
-import { findMissingShopifyProductIds } from "@/lib/shopify-admin";
+import { deleteShopifyProduct, findMissingShopifyProductIds, shopifyGraphql } from "@/lib/shopify-admin";
 
 function normalizeSyncToken(value: unknown) {
   let token = String(value || "")
@@ -79,6 +82,46 @@ export async function POST(req: NextRequest) {
     );
   try {
     const body = await req.json();
+
+    if (body?.action === "delete_discontinued_product") {
+      const id = String(body?.shopifyId || "").trim();
+      const sku = String(body?.sku || "").trim();
+      const mode = body?.mode;
+      if (!/^gid:\/\/shopify\/Product\/\d+$/.test(id) || !sku ||
+          (mode !== "preview" && mode !== "execute"))
+        return NextResponse.json({ error: "Produto ou modo inválido." }, { status: 400 });
+      const snapshot = await getAutomatedDeletionSnapshot(id);
+      if (!snapshot || snapshot.sku !== sku || !snapshot.in_winthor ||
+          snapshot.variant_count !== 1)
+        return NextResponse.json({ ok: true, eligible: false, reason: "SKU, variantes ou status WinThor não conferem." });
+      const syncedAt = new Date(snapshot.winthor_synced_at || "").getTime();
+      if (!Number.isFinite(syncedAt) || syncedAt > Date.now() ||
+          Date.now() - syncedAt > 30 * 60 * 60 * 1000)
+        return NextResponse.json({ error: "Sincronização WinThor ausente ou com mais de 30 horas." }, { status: 409 });
+      const live = await shopifyGraphql<{
+        product: { id: string; totalInventory: number; tracksInventory: boolean;
+          variants: { nodes: Array<{ sku: string }> } } | null;
+      }>("query ConfirmDiscontinuedInventory($id: ID!) { product(id: $id) { id totalInventory tracksInventory variants(first: 2) { nodes { sku } } } }", { id });
+      const product = live.product;
+      if (!product || product.id !== id || product.tracksInventory !== true ||
+          product.totalInventory !== 0 || product.variants.nodes.length !== 1 ||
+          product.variants.nodes[0].sku !== sku)
+        return NextResponse.json({ ok: true, eligible: false, reason: "Produto, variante ou estoque atual não confere." });
+      if (mode === "preview")
+        return NextResponse.json({ ok: true, eligible: true, deleted: false, shopifyId: id, sku, totalInventory: 0 });
+      const acquired = await beginAutomatedDeletion({ shopifyId: id, sku, title: snapshot.title, inventory: 0 });
+      if (!acquired)
+        return NextResponse.json({ ok: true, eligible: false, reason: "Produto já registrado no histórico para revisão; exclusão bloqueada." });
+      try {
+        await deleteShopifyProduct(id);
+      } catch (error) {
+        await finishAutomatedDeletion(id, "failed", error instanceof Error ? error.message : "Falha Shopify.");
+        throw error;
+      }
+      await finishAutomatedDeletion(id, "deleted");
+      await deleteShopifyCatalogProducts([id]);
+      return NextResponse.json({ ok: true, eligible: true, deleted: true, shopifyId: id, sku });
+    }
     if (body?.action === "list_discontinued_candidates") {
       const page = Number(body?.page ?? 1);
       if (!Number.isSafeInteger(page) || page < 1 || page > 1000)
