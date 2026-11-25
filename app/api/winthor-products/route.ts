@@ -5,6 +5,7 @@ import {
   beginAutomatedDeletion,
   finishAutomatedDeletion,
   getAutomatedDeletionSnapshot,
+  getLatestWinthorSyncAt,
   getCurrentUser,
   getWinthorProductStatus,
   listShopifyCatalogProducts,
@@ -27,6 +28,13 @@ function normalizeSyncToken(value: unknown) {
     token = token.slice(1, -1).trim();
   }
   return token;
+}
+
+function isValidDeletionToken(req: NextRequest) {
+  const expected = normalizeSyncToken(process.env.WINTHOR_SYNC_TOKEN);
+  const received = normalizeSyncToken(req.headers.get("x-pitterpan-token"));
+  if (!expected || !received) return false;
+  return timingSafeEqual(createHash("sha256").update(expected).digest(), createHash("sha256").update(received).digest());
 }
 
 function isValidSyncToken(req: NextRequest) {
@@ -84,6 +92,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (body?.action === "delete_discontinued_product") {
+      if (!isValidDeletionToken(req)) return NextResponse.json({ error: "Token WinThor necessário." }, { status: 401 });
       const id = String(body?.shopifyId || "").trim();
       const sku = String(body?.sku || "").trim();
       const mode = body?.mode;
@@ -123,6 +132,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, eligible: true, deleted: true, shopifyId: id, sku });
     }
     if (body?.action === "list_discontinued_candidates") {
+      const latest = new Date((await getLatestWinthorSyncAt()) || "").getTime();
+      if (!Number.isFinite(latest) || latest > Date.now() || Date.now() - latest > 30 * 60 * 60 * 1000)
+        return NextResponse.json({ error: "Sincronização WinThor ausente ou com mais de 30 horas." }, { status: 409 });
       const page = Number(body?.page ?? 1);
       if (!Number.isSafeInteger(page) || page < 1 || page > 1000)
         return NextResponse.json({ error: "Página inválida." }, { status: 400 });
