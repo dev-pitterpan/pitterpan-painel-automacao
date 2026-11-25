@@ -4,6 +4,7 @@ import {
   deleteShopifyCatalogProducts,
   getCurrentUser,
   getWinthorProductStatus,
+  listShopifyCatalogProducts,
   listShopifyCatalogIdsForWinthorSkus,
   syncWinthorProductStatuses,
   type WinthorStatusProduct,
@@ -78,6 +79,22 @@ export async function POST(req: NextRequest) {
     );
   try {
     const body = await req.json();
+    if (body?.action === "list_discontinued_candidates") {
+      const page = Number(body?.page ?? 1);
+      if (!Number.isSafeInteger(page) || page < 1 || page > 1000)
+        return NextResponse.json({ error: "Página inválida." }, { status: 400 });
+      const result = await listShopifyCatalogProducts({
+        winthorStatus: "FORA_DE_LINHA", page, perPage: 500,
+      });
+      return NextResponse.json({
+        page: result.page,
+        totalPages: result.totalPages,
+        totalOutOfLine: result.total,
+        candidates: result.products
+          .filter((product) => product.sku && product.totalInventory === 0 && product.variants.length === 1)
+          .map((product) => ({ shopifyId: product.shopifyId, sku: product.sku, title: product.title })),
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (
       !Array.isArray(body?.products) ||
       body.products.length === 0 ||
