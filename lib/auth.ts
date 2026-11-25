@@ -2089,3 +2089,82 @@ export async function getAuthenticatedUser() {
 
 
 
+
+export async function getAutomatedDeletionSnapshot(shopifyId: string) {
+  await ensureDatabase();
+  const [row] = await query<{
+    sku: string; title: string; variant_count: number; in_winthor: boolean;
+    winthor_synced_at: string | null;
+  }>(`SELECT p.primary_sku AS sku, p.title,
+      jsonb_array_length(p.variants_json)::int AS variant_count,
+      (w.sku IS NOT NULL) AS in_winthor,
+      latest.created_at AS winthor_synced_at
+    FROM shopify_catalog_products p
+    LEFT JOIN LATERAL (
+      SELECT batch_id, created_at FROM winthor_sync_runs
+      ORDER BY created_at DESC LIMIT 1
+    ) latest ON TRUE
+    LEFT JOIN winthor_product_statuses w
+      ON w.batch_id = latest.batch_id AND w.sku = p.primary_sku
+    WHERE p.shopify_id = $1 LIMIT 1`, [shopifyId]);
+  return row || null;
+}
+
+async function ensureAutomatedDeletionHistory() {
+  await query(`CREATE TABLE IF NOT EXISTS shopify_auto_deletion_history (
+    id BIGSERIAL PRIMARY KEY,
+    shopify_id TEXT NOT NULL UNIQUE,
+    sku TEXT NOT NULL,
+    title TEXT NOT NULL,
+    inventory_at_check INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL CHECK (status IN ('pending','deleted','failed')),
+    error_message TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+  )`);
+}
+
+export async function beginAutomatedDeletion(input: { shopifyId: string; sku: string; title: string; inventory: number }) {
+  await ensureAutomatedDeletionHistory();
+  const rows = await query<{ id: number }>(
+    `INSERT INTO shopify_auto_deletion_history
+       (shopify_id, sku, title, inventory_at_check, status)
+     VALUES ($1,$2,$3,$4,'pending')
+     ON CONFLICT (shopify_id) DO NOTHING RETURNING id`,
+    [input.shopifyId,input.sku,input.title,input.inventory],
+  );
+  return rows.length > 0;
+}
+
+export async function finishAutomatedDeletion(shopifyId: string, status: 'deleted' | 'failed', error = '') {
+  await ensureAutomatedDeletionHistory();
+  await query(
+    `UPDATE shopify_auto_deletion_history SET status=$2,error_message=$3,completed_at=NOW()
+     WHERE shopify_id=$1 AND status='pending'`,
+    [shopifyId,status,error.slice(0,1000)],
+  );
+}
+
+export async function listAutomatedDeletionHistory(page: number, search: string) {
+  await ensureAutomatedDeletionHistory();
+  const safePage = Math.max(1, Math.min(10000, Math.trunc(page || 1)));
+  const term = String(search || '').trim().slice(0,160);
+  const [count] = await query<{ total: number }>(
+    `SELECT COUNT(*)::int AS total FROM shopify_auto_deletion_history
+     WHERE $1 = '' OR sku ILIKE '%'||$1||'%' OR title ILIKE '%'||$1||'%'`, [term]);
+  const rows = await query<{
+    shopify_id: string; sku: string; title: string; inventory_at_check: number;
+    status: string; error_message: string; created_at: string; completed_at: string | null;
+  }>(`SELECT shopify_id,sku,title,inventory_at_check,status,error_message,created_at,completed_at
+      FROM shopify_auto_deletion_history
+      WHERE $1 = '' OR sku ILIKE '%'||$1||'%' OR title ILIKE '%'||$1||'%'
+      ORDER BY created_at DESC LIMIT 50 OFFSET $2`, [term,(safePage-1)*50]);
+  return { rows, total: Number(count?.total||0), page: safePage, perPage: 50 };
+}
+
+export async function getLatestWinthorSyncAt() {
+  const [row] = await query<{ created_at: string }>(
+    "SELECT created_at FROM winthor_sync_runs ORDER BY created_at DESC LIMIT 1",
+  );
+  return row?.created_at || null;
+}

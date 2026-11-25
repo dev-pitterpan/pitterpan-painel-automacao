@@ -180,3 +180,18 @@ CREATE INDEX IF NOT EXISTS idx_reprocess_jobs_sku_created ON reprocess_jobs ((LO
 
 
 
+
+CREATE TABLE IF NOT EXISTS shopify_auto_deletion_history (
+  id BIGSERIAL PRIMARY KEY,
+  shopify_id TEXT NOT NULL UNIQUE,
+  sku TEXT NOT NULL,
+  title TEXT NOT NULL,
+  inventory_at_check INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL CHECK (status IN ('pending','deleted','failed')),
+  error_message TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_shopify_auto_deletion_history_created
+  ON shopify_auto_deletion_history (created_at DESC);

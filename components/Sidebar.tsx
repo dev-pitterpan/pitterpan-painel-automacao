@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CircleAlert,
   FileText,
+  History,
   LayoutDashboard,
   LogOut,
   Package,
@@ -41,6 +42,7 @@ export function Sidebar({ user }: { user: AuthUser }) {
     user.role === "admin"
       ? [
           ...items,
+          ["Histórico de exclusões", "/excluidos/historico", History] as [string, string, LucideIcon],
           ["Reprocessados", "/reprocessados", RotateCcw] as [
             string,
             string,
