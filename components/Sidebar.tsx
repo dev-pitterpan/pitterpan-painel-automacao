@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CircleAlert,
   FileText,
+  History,
   LayoutDashboard,
   LogOut,
   Package,
@@ -26,6 +27,7 @@ const items: Array<[string, string, LucideIcon]> = [
   ["Dashboard", "/", LayoutDashboard],
   ["Produtos", "/produtos", Package],
   ["Excluídos", "/excluidos", ArchiveX],
+  ["Histórico de exclusões", "/excluidos/historico", History],
   ["Erros", "/erros", CircleAlert],
   ["Relatórios", "/relatorios", FileText],
 ];
